@@ -1,0 +1,7 @@
+<config>
+  	<ranging use="1" topic="/gtec/toa/ranging"/>
+	<erlemag use="1" topic="/gtec/gazebo/erle/mag" interference="1" topicInterference="/gtec/gazebo/erle/maginterfered"/>
+	<erleimu use="1" topic="/gtec/gazebo/erle/imu"/>
+	<px4flow use="1" topic="/gtec/gazebo/px4flow"/>
+	<anchors use="1" topic="/gtec/gazebo/anchors"/> 
+</config>

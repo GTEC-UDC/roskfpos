@@ -1,0 +1,7 @@
+<config>
+<!-- r01 -->
+  <!--<px4flow armP0="0" armP1="0.493" useFixedSensorHeight="1" sensorHeight="3.0" sensorInitAngle ="0" covarianceVelocity="0.4" covarianceGyroZ="0.4"/>-->
+
+<!-- r02 -->
+  <px4flow armP0="0" armP1="0.493" useFixedSensorHeight="1" sensorHeight="3.0" sensorInitAngle ="-1.570796326794897" covarianceVelocity="0.4" covarianceGyroZ="0.4"/>	
+</config>

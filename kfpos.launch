@@ -1,0 +1,17 @@
+<launch>
+    <node name="kfpos" output="screen" pkg="gtec_roskfpos" type="kfpos" launch-prefix="">
+        <param name="rate" type="int" value="20" />
+        <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions.xml">
+        </param>
+        <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">
+        </param>
+        <param name="configPX4Flow" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_px4flow.xml">
+        </param>
+        <param name="configTag" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_t0.xml">
+        </param>
+        <param name="configErleImu" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_erleimu.xml">
+        </param>
+        <param name="configErleMag" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_erlemag.xml">
+        </param>
+    </node>
+</launch>

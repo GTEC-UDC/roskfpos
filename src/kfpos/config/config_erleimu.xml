@@ -1,0 +1,5 @@
+<config>
+<!-- GAZEBO -->
+<!-- <erleimu useFixedCovarianceAcceleration="1" covarianceAcceleration="0.01"  useFixedCovarianceAngularVelocityZ="1" covarianceAngularVelocityZ="0.000786"/>  -->
+ <erleimu useFixedCovarianceAcceleration="1" covarianceAcceleration="0.01"  useFixedCovarianceAngularVelocityZ="1" covarianceAngularVelocityZ="0.0012"/> 
+</config>

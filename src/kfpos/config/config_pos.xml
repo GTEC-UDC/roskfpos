@@ -1,30 +1,29 @@
 <config>
- <twotags use="0" t0x="0.0" t0y="0.0" t0z="-0.1" t1x="0.0" t1y="0.0" t1z="0.1"/>
  <!--
 	Algorithm
 	*********
 	type= 0: ML
 	type= 1: KF
 
- 	Variant: Variante del algoritmo de posicionamiento
+ 	Variant:
  	**************************************************
- 	Variant= 0: Modo normal
- 	Variant= 1: Se ignoran los N rangings con mayor error.
- 			- numIgnoredRangings Numero de rangings a ignorar
- 	Variant= 2: Solo se usan las 3 mejores balizas.
- 			- bestMode: Criterio de seleccion de balizas. 
-				* 0: menor error en x, y,z. 
-				* 1: menor error en z.
+ 	Variant= 0: Normal Mode
+ 	Variant= 1: Ignored N rangings with bigger error.
+ 			- numIgnoredRangings Number of values to ignore.
+ 	Variant= 2: Uses only the 3 best anchors.
+ 			- bestMode: How to select the best anchors: 
+				* 0: lower error in x,y,z. 
+				* 1: lower error only in z.
 
-	minZ, maxZ : Limites en la coordenada Z
+	minZ, maxZ : Z limits
 	***************************************
-	minZ: valor minimo de Z. No se genera posicion si el valor estimado es menor.
- 	maxZ: valor máximo de Z. No se genera posicion si el valor estimado es mayor.
+	minZ: No estimation if the estimation value of Z is lower.
+ 	maxZ: No estimation if the estimation value of Z is greater.
 
-	Posicion inicial
+	Start position
 	****************
-	useInitPosition = 0: Se usa una posicion inicial aleatoria.
-	useInitPosition = 1: Se usa la posicion especificada en los campos initX, initY, initZ
+	useInitPosition = 0: Uses ML Algorithm to find the initial position
+	useInitPosition = 1: Uses the position defined by initX, initY, initZ
  -->
- <algorithm type="0" variant="0" numIgnoredRangings="2" bestMode="0" minZ="0.0" maxZ="3.0"  useInitPosition="0" initX="8" initY="0" initZ="2"/>
+   <algorithm type="0" variant="0" numIgnoredRangings="2" bestMode="0" minZ="0.0" maxZ="3.0"  useInitPosition="1" initX="1.0" initY="1.0" initZ="1.048"/>
 </config>

@@ -1,26 +1,3 @@
-/*
-MIT License
-
-Copyright (c) 2018 Group of Electronic Technology and Communications. University of A Coruña.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 #ifndef POSGENERATOR_PX4FLOW_H
 #define POSGENERATOR_PX4FLOW_H
 
@@ -53,6 +30,7 @@ SOFTWARE.
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <geometry_msgs/PoseWithCovariance.h>
 #include <geometry_msgs/PoseStamped.h>
 #include "std_msgs/Int32MultiArray.h"
 #include <sstream>
@@ -65,6 +43,12 @@ SOFTWARE.
 #include <sensor_msgs/MagneticField.h>
 #include <std_msgs/Float64.h>
 
+#include <tf/transform_broadcaster.h>
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/TwistWithCovariance.h>
+#include <geometry_msgs/Twist.h>
+#include <tf/transform_broadcaster.h>
+
 #include "../algorithms/sensor_types.h"
 
 #define HIS_LENGTH 100
@@ -75,6 +59,7 @@ SOFTWARE.
 #define ALGORITHM_ML 2
 #define ALGORITHM_MAP 3
 #define ALGORITHM_KF 4
+#define ALGORITHM_KF_UWB 5
 
 #define RESULT_ML 4
 #define RESULT_MAP 5
@@ -148,12 +133,15 @@ public:
     PosGenerator(int algorithm, bool useRawRange, int tagOffset0, int tagOffset1, int tagOffset2, int tagOffset3, bool useTwoTags);
 
 
-    void start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag,ros::Publisher aPub, ros::Publisher aPathPub);
+    void start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag,ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,double jolt);
+    void start(std::string configFilenamePos,  std::string configFilenameTag, ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,  double jolt);
+
 
     void setUseRawRange(bool useRawRange);
     void setTagOffset(int tagOffset0, int tagOffset1, int tagOffset2, int tagOffset3);
     void setObservationCovariance(std::vector<double> obsCov);
-    void setAlgorithm(int algorithm);
+    //void setAlgorithm(int algorithm);
+    void setAlgorithm(int algorithm, double accelerationNoise, bool ignoreWorstAnchorMode, double ignoreCostThreshold, bool mode3d);
     void setTwoTagsMode(bool twoTagsMode);
     void setTag0RelativePosition(double x, double y, double z);
     void setTag1RelativePosition(double x, double y, double z);
@@ -169,15 +157,17 @@ public:
 
 
     bool init( std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag);
+    bool init(std::string filenamePos, std::string filenameTag);
     void reset();
 
-    void newRanging(const gtec_msgs::Ranging::ConstPtr& uwbRanging);
+    void newUWBMeasurement(const gtec_msgs::Ranging::ConstPtr& uwbRanging);
     void newPX4FlowMeasurement(const mavros_msgs::OpticalFlowRad::ConstPtr& px4FlowMeasurement);
-    void newErleImuMeasurement(const sensor_msgs::Imu::ConstPtr& erleImuMeasurement);
-    void newErleMagMeasurement(const sensor_msgs::MagneticField::ConstPtr& erleMagMeasurement);
-    void newErleCompassMeasurement(const std_msgs::Float64 compasMeasurement);
+    void newIMUMeasurement(const sensor_msgs::Imu::ConstPtr& imuMeasurement);
+    void newMAGMeasurement(const sensor_msgs::MagneticField::ConstPtr& magMeasurement);
+    void newCompassMeasurement(const std_msgs::Float64 compasMeasurement);
 
     void newAnchorsMarkerArray(const visualization_msgs::MarkerArray::ConstPtr& anchorsMarkerArray);
+
 
 private:
     ros::Publisher ros_pub;
@@ -185,6 +175,7 @@ private:
     ros::Publisher ros_pub_anchors;
     ros::Publisher ros_pub_imu;
     ros::Publisher ros_pub_compass;
+    ros::Publisher ros_pub_odom;
 
     void timerRangingCallback(const ros::TimerEvent& event);
 
@@ -194,6 +185,7 @@ private:
     bool publishImu;
     bool publishAnchors;
     bool publishCompass;
+    double mJolt;
 
     int maxPathSize = 1000;
     int currentPathIndex = 0;
@@ -210,7 +202,6 @@ private:
 
     bool useFixedHeightUWB;
     double fixedHeightUWB;
-
     bool usePX4Flow;
     bool useFixedHeightPX4Flow;
     double armP0PX4Flow;
@@ -247,7 +238,7 @@ private:
     void processRangingNow(int anchorId, int tagId, double range, double rawrange, double errorEstimation, int seq, bool withErrorEstimation);
     
 
-    void sendRangingMeasurementIfAvailable();
+    void sendRangingMeasurementIfAvailable(tag_reports_t tagReport);
     Vector3 previousPos;
     std::unique_ptr<KalmanFilter> kalmanFilter;
     std::vector<Beacon> beacons;
@@ -269,6 +260,9 @@ private:
     std::chrono::steady_clock::time_point timestampLastRanging;
 
     bool anchorsSet;
+    bool mode3d;
+
+    tf::TransformBroadcaster mBroadcaster;
 
 
 };

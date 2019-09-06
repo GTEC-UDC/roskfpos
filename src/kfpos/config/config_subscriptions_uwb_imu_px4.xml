@@ -1,0 +1,6 @@
+<config>
+  	<uwb use="1" topic="/gtec/gazebo/uwb/ranging/0" anchors_topic="/gtec/gazebo/uwb/anchors/0"/>
+	<mag use="1" topic="/gtec/gazebo/mag" interference="0" topicInterference="/gtec/gazebo/maginterfered"/>
+	<imu use="1" topic="/gtec/gazebo/imu"/>
+	<px4flow use="1" topic="/gtec/gazebo/px4flow"/> 
+</config>

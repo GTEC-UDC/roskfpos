@@ -1,0 +1,3 @@
+<config>
+ <imu useFixedCovarianceAcceleration="1" covarianceAcceleration="0.003"  useFixedCovarianceAngularVelocityZ="1" covarianceAngularVelocityZ="0.089"/> 
+</config>

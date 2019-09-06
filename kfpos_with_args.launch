@@ -8,19 +8,19 @@
     <arg default="1" name="use_px4">
     </arg>
     <node launch-prefix="" name="kfpos" output="screen" pkg="gtec_roskfpos" type="kfpos">
-        <param name="rate" type="int" value="40">
-        </param>
+        <param name="rate" type="int" value="30"></param>
+        <param name="jolt" type="double" value="0.5"></param>
         <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions.xml">
         </param>
         <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">
         </param>
         <param name="configPX4Flow" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_px4flow.xml">
         </param>
-        <param name="configTag" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_t0.xml">
+        <param name="configUWB" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_uwb.xml">
         </param>
-        <param name="configErleImu" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_erleimu.xml">
+        <param name="configIMU" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_imu.xml">
         </param>
-        <param name="configErleMag" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_erlemag.xml">
+        <param name="configMAG" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_mag.xml">
         </param>
         <param name="use_uwb" type="int" value="$(arg use_uwb)">
         </param>

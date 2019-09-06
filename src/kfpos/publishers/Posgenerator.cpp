@@ -1,26 +1,3 @@
-/*
-MIT License
-
-Copyright (c) 2018 Group of Electronic Technology and Communications. University of A Coruña.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 #include "Posgenerator.h"
 
 
@@ -101,23 +78,117 @@ void PosGenerator::newAnchorsMarkerArray(const visualization_msgs::MarkerArray::
     }
     anchorsSet = true;
     ROS_INFO("Anchors set");
+
+    for (int i = 0; i < beacons.size(); ++i)
+    {
+      
+      Beacon beacon= beacons[i];
+      ROS_INFO("Anchors: %d  (%f, %f, %f)", i, beacon.position.x, beacon.position.y, beacon.position.z);
+    }
   }
   
 }
 
 
-void PosGenerator::start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag, ros::Publisher aPub, ros::Publisher aPathPub) {
+void PosGenerator::start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag, ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub, double jolt) {
 
-  ROS_INFO("POSGEN: Iniciando POS GENERATOR");
-  //Cargamos la configuracion
   bool configLoaded = init(configFilenamePos, configFilenamePX4Flow, configFilenameTag, configFilenameImu, configFilenameMag);
   ros_pub = aPub;
   ros_pub_path = aPathPub;
-
-  if (configLoaded) {
-    ROS_INFO("POSGEN: Configuracion cargada");
-  }
+  ros_pub_odom = aOdomPub;
+  mJolt = jolt;
 }
+
+void PosGenerator::start(std::string configFilenamePos,  std::string configFilenameTag, ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,  double jolt) {
+  bool configLoaded = init(configFilenamePos, configFilenameTag);
+  ros_pub = aPub;
+  ros_pub_path = aPathPub;
+  ros_pub_odom = aOdomPub;
+  mJolt = jolt;
+}
+
+bool PosGenerator::init(std::string filenamePos, std::string filenameTag) {
+
+  try {
+
+    //************************************
+    // UWB Tag
+    //************************************
+
+    boost::property_tree::ptree configTreeTag;
+    ros::NodeHandle node_handleTag("~");
+    std::string configContentTag;
+    node_handleTag.getParam(filenameTag, configContentTag);
+    std::stringstream ssTag;
+    ssTag << configContentTag;
+    boost::property_tree::read_xml(ssTag, configTreeTag);
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeTag.get_child("config")) {
+      if (v.first.compare("uwb") == 0) {
+        int use = v.second.get<int>("<xmlattr>.useFixedHeight", 0);
+        useFixedHeightUWB = (use == 1);
+        fixedHeightUWB = v.second.get<double>("<xmlattr>.fixedHeight", 0);
+      }
+    }
+
+    //************************************
+    // Position Algorithm
+    //************************************
+
+    boost::property_tree::ptree configTreePos;
+    ros::NodeHandle node_handlePos("~");
+    std::string configContentPos;
+    node_handlePos.getParam(filenamePos, configContentPos);
+    std::stringstream ssPos;
+    ssPos << configContentPos;
+    boost::property_tree::read_xml(ssPos, configTreePos);
+
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreePos.get_child("config")) {
+      if (v.first.compare("algorithm") == 0) {
+
+        int type = v.second.get<int>("<xmlattr>.type", 0);
+        int variant = v.second.get<int>("<xmlattr>.variant", 0);
+        int numIgnoredRangings = v.second.get<int>("<xmlattr>.numIgnoredRangings", 0);
+        int bestMode = v.second.get<int>("<xmlattr>.bestMode", 0);
+        double minZ = v.second.get<double>("<xmlattr>.minZ", 0);
+        double maxZ = v.second.get<double>("<xmlattr>.maxZ", 0);
+
+        useInitPosition = 0;
+
+        int hasInitPosition = v.second.get<int>("<xmlattr>.useInitPosition", 0);
+        useInitPosition = (hasInitPosition == 1);
+        if (useInitPosition) {
+          initPosition.x = v.second.get<double>("<xmlattr>.initX", 0);
+          initPosition.y = v.second.get<double>("<xmlattr>.initY", 0);
+          initPosition.z = v.second.get<double>("<xmlattr>.initZ", 0);
+        }
+
+        if (variant == 0) {
+          setVariantNormal();
+          ROS_INFO("POSGEN: Variant NORMAL");
+        } else if (variant == 1) {
+          setVariantIgnoreN(numIgnoredRangings);
+          ROS_INFO("POSGEN: Variant IGNORE N. Ignored: %d", numIgnoredRangings);
+        } else  if (variant == 2) {
+          setVariantOnlyBest(bestMode, minZ, maxZ);
+          ROS_INFO("POSGEN: Variant Best N:. BestMode: %d minZ: %f mazZ: %f", bestMode, minZ, maxZ);
+        }
+
+      }
+    }
+
+    return true;
+
+  } catch (boost::exception const &ex) {
+    return false;
+  }
+
+
+  return false;
+}
+
+
 
 
 bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag) {
@@ -125,10 +196,9 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
   try {
 
     //************************************
-    //Cargamos la configuracion de PX4Flow
+    // PX4Flow
     //************************************
 
-    ROS_INFO("Intentando cargar propiedad %s", filenamePX4Flow.c_str());
     boost::property_tree::ptree configTreePX4Flow;
     ros::NodeHandle node_handlePX4Flow("~");
     std::string configContentPX4Flow;
@@ -139,9 +209,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
 
     BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreePX4Flow.get_child("config")) {
       if (v.first.compare("px4flow") == 0) {
-        //int use = v.second.get<int>("<xmlattr>.use", 0);
         usePX4Flow = true;
-
         int useFH = v.second.get<int>("<xmlattr>.useFixedSensorHeight", 0);
         useFixedHeightPX4Flow = (useFH == 1);
 
@@ -150,17 +218,15 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
         armP1PX4Flow = v.second.get<double>("<xmlattr>.armP1", 0);
         initAnglePX4Flow = v.second.get<double>("<xmlattr>.sensorInitAngle", 0);
 
-        //covarianceVelocity="0.0001" covarianceGyroZ="0.001"
         covarianceVelocityPX4Flow = v.second.get<double>("<xmlattr>.covarianceVelocity", 0);
         covarianceGyroZPX4Flow = v.second.get<double>("<xmlattr>.covarianceGyroZ", 0);
       }
     }
 
     //************************************
-    //Cargamos la configuracion de tag UWB
+    // UWB
     //************************************
 
-    ROS_INFO("Intentando cargar propiedad %s", filenameTag.c_str());
     boost::property_tree::ptree configTreeTag;
     ros::NodeHandle node_handleTag("~");
     std::string configContentTag;
@@ -179,10 +245,9 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
 
 
     //************************************
-    //Cargamos la configuracion de Erle IMU
+    // IMU
     //************************************
 
-    ROS_INFO("Intentando cargar propiedad %s", filenameImu.c_str());
     boost::property_tree::ptree configTreeImu;
     ros::NodeHandle node_handleImu("~");
     std::string configContentImu;
@@ -192,7 +257,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
     boost::property_tree::read_xml(ssImu, configTreeImu);
 
     BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeImu.get_child("config")) {
-      if (v.first.compare("erleimu") == 0) {
+      if (v.first.compare("imu") == 0) {
         //use="1" covarianceAcceleration="0.01"  useFixedCovarianceAngularVelocityZ="1" covarianceAngularVelocityZ="0.001" angleOffset="-0.4" covarianceOrientationZ="0.01"
         //int use = v.second.get<int>("<xmlattr>.use", 0);
         useImu = true;
@@ -208,10 +273,9 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
 
 
     //************************************
-    //Cargamos la configuracion de Erle Mag
+    // Mag
     //************************************
 
-    ROS_INFO("Intentando cargar propiedad %s", filenameMag.c_str());
     boost::property_tree::ptree configTreeMag;
     ros::NodeHandle node_handleMag("~");
     std::string configContentMag;
@@ -221,7 +285,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
     boost::property_tree::read_xml(ssMag, configTreeMag);
 
     BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeMag.get_child("config")) {
-      if (v.first.compare("erlemag") == 0) {
+      if (v.first.compare("mag") == 0) {
         //use="1" covarianceAcceleration="0.01"  useFixedCovarianceAngularVelocityZ="1" covarianceAngularVelocityZ="0.001" angleOffset="-0.4" covarianceOrientationZ="0.01"
         //int use = v.second.get<int>("<xmlattr>.use", 0);
         useMag = true;
@@ -232,7 +296,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
 
 
     //************************************
-    //Cargamos la configuracion de Posicion
+    // Position
     //************************************
 
     ROS_INFO("POSGEN: Intentando cargar propiedad %s", filenamePos.c_str());
@@ -265,14 +329,6 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
           initPosition.z = v.second.get<double>("<xmlattr>.initZ", 0);
         }
 
-        // if (type == 0) {
-        //   setAlgorithm(ALGORITHM_ML);
-        //   ROS_INFO("POSGEN: ALGORITHM_ML");
-        // } else if (type == 1) {
-        //   setAlgorithm(ALGORITHM_KF);
-        //   ROS_INFO("POSGEN: ALGORITHM_KF");
-        // }
-
         if (variant == 0) {
           setVariantNormal();
           ROS_INFO("POSGEN: Variant NORMAL");
@@ -284,26 +340,6 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
           ROS_INFO("POSGEN: Variant Best N:. BestMode: %d minZ: %f mazZ: %f", bestMode, minZ, maxZ);
         }
 
-      } else if (v.first.compare("twotags") == 0) {
-        int useTwoTags = v.second.get<int>("<xmlattr>.use", 0);
-
-        if (useTwoTags == 1) {
-          ROS_INFO("POSGEN: TWOTAGS ON");
-          setTwoTagsMode(true);
-          double t0x = v.second.get<double>("<xmlattr>.t0x", 0);
-          double t0y = v.second.get<double>("<xmlattr>.t0y", 0);
-          double t0z = v.second.get<double>("<xmlattr>.t0z", 0);
-          double t1x = v.second.get<double>("<xmlattr>.t1x", 0);
-          double t1y = v.second.get<double>("<xmlattr>.t1y", 0);
-          double t1z = v.second.get<double>("<xmlattr>.t1z", 0);
-
-          setTag0RelativePosition(t0x, t0y, t0z);
-          setTag1RelativePosition(t1x, t1y, t1z);
-
-        } else {
-          ROS_INFO("POSGEN: TWOTAGS OFF");
-          setTwoTagsMode(false);
-        }
       }
     }
 
@@ -312,7 +348,6 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
   } catch (boost::exception const &ex) {
     return false;
   }
-
 
 
   return false;
@@ -325,11 +360,9 @@ void PosGenerator::reset() {
 }
 
 
-void PosGenerator::newRanging(const gtec_msgs::Ranging::ConstPtr& uwbRanging) {
+void PosGenerator::newUWBMeasurement(const gtec_msgs::Ranging::ConstPtr& uwbRanging) {
   if (anchorsSet){
-    //TODO MARCAR TEMPORALMENTE CUANDO SE LANZA EL ALGORITMO PARA PODER DAR UN TIEMPO ENTRE RANGINGS
-    //ROS_INFO("RRPOS :[AnchorId:%d, TagId:%d, Range:%d, ErrorEstimation:%f, SEQ:%d]", uwbRanging->anchorId, uwbRanging->tagId, uwbRanging->range, uwbRanging->errorEstimation, uwbRanging->seq);
-    processRangingNow(uwbRanging->anchorId, uwbRanging->tagId, uwbRanging->range, uwbRanging->range, uwbRanging->errorEstimation, uwbRanging->seq, (uwbRanging->errorEstimation > 0.0));
+     processRangingNow(uwbRanging->anchorId, uwbRanging->tagId, uwbRanging->range, uwbRanging->range, uwbRanging->errorEstimation, uwbRanging->seq, (uwbRanging->errorEstimation > 0.0));
   }
 
 }
@@ -338,110 +371,102 @@ void PosGenerator::newRanging(const gtec_msgs::Ranging::ConstPtr& uwbRanging) {
 void PosGenerator::newPX4FlowMeasurement(const mavros_msgs::OpticalFlowRad::ConstPtr& px4FlowMeasurement) {
 
   if (usePX4Flow) {
-    //if (px4FlowMeasurement->quality > 0) {
     if (px4FlowMeasurement->integration_time_us > 0 && px4FlowMeasurement->quality >0 ) {
       kalmanFilter->newPX4FlowMeasurement(px4FlowMeasurement->integrated_x, px4FlowMeasurement->integrated_y, px4FlowMeasurement->integrated_zgyro, px4FlowMeasurement->integration_time_us, covarianceVelocityPX4Flow, covarianceGyroZPX4Flow, px4FlowMeasurement->quality);
     }
-    //}
   }
 }
 
 
-void PosGenerator::newErleMagMeasurement(const sensor_msgs::MagneticField::ConstPtr& erleMagMeasurement) {
+void PosGenerator::newMAGMeasurement(const sensor_msgs::MagneticField::ConstPtr& magMeasurement) {
   if (useMag) {
-    kalmanFilter->newErleMagMeasurement(erleMagMeasurement->magnetic_field.x, erleMagMeasurement->magnetic_field.y, covarianceMag);
+    kalmanFilter->newMAGMeasurement(magMeasurement->magnetic_field.x, magMeasurement->magnetic_field.y, covarianceMag);
   }
 
 }
 
 
-void PosGenerator::newErleCompassMeasurement(const std_msgs::Float64 compasMeasurement) {
-  // Solo para logs, descomentar para funcionamiento normal.
-
-  // if (publishCompass){
-  //  ros_pub_compass.publish(compasMeasurement);
-  // }
-
+void PosGenerator::newCompassMeasurement(const std_msgs::Float64 compasMeasurement) {
   if (useMag) {
-    kalmanFilter->newErleCompassMeasurement(compasMeasurement.data, covarianceMag);
+    kalmanFilter->newCompassMeasurement(compasMeasurement.data, covarianceMag);
   }
 }
 
 
-void PosGenerator::newErleImuMeasurement(const sensor_msgs::Imu::ConstPtr& erleImuMeasurement) {
-
-  //Lo siguiente solo para log, comentar en comportamiento normal
-  // if (publishImu){
-  //   ros_pub_imu.publish(erleImuMeasurement);
-  // }
+void PosGenerator::newIMUMeasurement(const sensor_msgs::Imu::ConstPtr& imuMeasurement) {
 
   if (useImu) {
     double covarianceAccelerationXY[4];
 
-
     if (useImuFixedCovarianceAcceleration) {
       covarianceAccelerationXY[0] = imuCovarianceAcceleration;
-      covarianceAccelerationXY[1] = erleImuMeasurement->linear_acceleration_covariance[1];
-      covarianceAccelerationXY[2] = erleImuMeasurement->linear_acceleration_covariance[3];
+      covarianceAccelerationXY[1] = imuMeasurement->linear_acceleration_covariance[1];
+      covarianceAccelerationXY[2] = imuMeasurement->linear_acceleration_covariance[3];
       covarianceAccelerationXY[3] = imuCovarianceAcceleration;
     } else {
-      covarianceAccelerationXY[0] = erleImuMeasurement->linear_acceleration_covariance[0];
-      covarianceAccelerationXY[1] = erleImuMeasurement->linear_acceleration_covariance[1];
-      covarianceAccelerationXY[2] = erleImuMeasurement->linear_acceleration_covariance[3];
-      covarianceAccelerationXY[3] = erleImuMeasurement->linear_acceleration_covariance[4];
+      covarianceAccelerationXY[0] = imuMeasurement->linear_acceleration_covariance[0];
+      covarianceAccelerationXY[1] = imuMeasurement->linear_acceleration_covariance[1];
+      covarianceAccelerationXY[2] = imuMeasurement->linear_acceleration_covariance[3];
+      covarianceAccelerationXY[3] = imuMeasurement->linear_acceleration_covariance[4];
     }
 
-    double covAngularVelocityZ = erleImuMeasurement->angular_velocity_covariance[8];
+    double covAngularVelocityZ = imuMeasurement->angular_velocity_covariance[8];
     if (useImuFixedCovarianceAngularVelocityZ) {
       covAngularVelocityZ = imuCovarianceAngularVelocityZ;
     }
 
-
-    kalmanFilter->newErleImuMeasurement(erleImuMeasurement->angular_velocity.z, covAngularVelocityZ, erleImuMeasurement->linear_acceleration.x, erleImuMeasurement->linear_acceleration.y, covarianceAccelerationXY);
+    kalmanFilter->newIMUMeasurement(imuMeasurement->angular_velocity.z, covAngularVelocityZ, imuMeasurement->linear_acceleration.x, imuMeasurement->linear_acceleration.y, covarianceAccelerationXY);
   }
 }
 
-
-
 void PosGenerator::timerRangingCallback(const ros::TimerEvent& event){
     rangingTimeout = true;
-    sendRangingMeasurementIfAvailable();
+
+    if (_tagList.size()>0){
+
+     int tagId = 0;
+      tag_reports_t rp = _tagList.at(tagId);
+      sendRangingMeasurementIfAvailable(rp);
+    }
+
+
 }
 
 
 
-void PosGenerator::sendRangingMeasurementIfAvailable() {
+void PosGenerator::sendRangingMeasurementIfAvailable(tag_reports_t tagReport) {
 
 //Suponemos tagID 0
   int tagId = 0;
   bool canSend = false;
+  int minRangingsToSend = mode3d ? 1 : 1;
+  
+tag_reports_t rp = tagReport;
+ 
+  if (rp.rangeSeq != -1) {
 
-  if (lastRangingSeq != -1) {
-    //Solo hacemos algo si tenemos un ultimo numero de secuencia valido
-    tag_reports_t rp = _tagList.at(tagId);
-
-    //TODO: esto revisar, solo si son maximo 4 rangins
-    //Si tenemos 4 o mas, podemos enviarlos ya
-    if (rp.rangeCount[lastRangingSeq] >= beacons.size()) {
+    if (rp.rangeCount[rp.rangeSeq] >= minRangingsToSend) {
       canSend = true;
+    } 
 
-    } else if ((rp.rangeCount[lastRangingSeq] >= 3) && (rangingTimeout)) {
-
+/*    else if ((rp.rangeCount[lastRangingSeq] >= minRangingsToSend) && (rangingTimeout)) {
+      //Si hay timeout y tenemos un minimo de ranging, podemos usar los que haya
       canSend = true;
-    }
+    }*/
 
-
+  
 
 
     if (canSend) {
+      ROS_INFO("Can send measurements"); 
       //ROS_INFO("Sending %d ranging measurements",rp.rangeCount[lastRangingSeq]); 
 
       //Paramos el timer de ranging
       timerRanging.stop();
 
 
-      int count = rp.rangeCount[lastRangingSeq];
-      //ROS_INFO("Sending %d rangings", count);
+      int count = rp.rangeCount[rp.rangeSeq];
+      ROS_INFO("Sending %d rangings", count);
       double timeLag;
       auto now = std::chrono::steady_clock::now();
 
@@ -457,9 +482,11 @@ void PosGenerator::sendRangingMeasurementIfAvailable() {
       mLastRangingPositionTimestamp = now;
 
       Vector3 report;
-      int result = calculateTagLocationWithRangings(&report, count, &rp.rangeValue[lastRangingSeq][0], &rp.errorEstimation[lastRangingSeq][0], timeLag);
+      int result = calculateTagLocationWithRangings(&report, count, &rp.rangeValue[rp.rangeSeq][0], &rp.errorEstimation[rp.rangeSeq][0], timeLag);
       //publishPositionReport(report);
-      lastRangingSeq = -1;
+      //lastRangingSeq = -1;
+    } else {
+      //ROS_INFO("Can NOT send measurements"); 
     }
   }
 }
@@ -509,11 +536,12 @@ void PosGenerator::processRangingNow(int anchorId, int tagId, double range, doub
   tag_reports_t rp = _tagList.at(idx);
 
   //Ponemos la variable global apuntando al ultimo valor
-  lastRangingSeq = seq;
+  
   timestampLastRanging = std::chrono::steady_clock::now();
 
   if (rp.rangeSeq == seq)
   {
+    //We are receiving a range with the current seq number
     rp.rangeCount[seq]++;
     rp.rangeSeq = seq;
     rp.rangeValue[seq][anchorId] = range_corrected;
@@ -523,7 +551,12 @@ void PosGenerator::processRangingNow(int anchorId, int tagId, double range, doub
     }
   } else
   {
-    //TODO lo siguiente es temporal, habria que buscar otra forma
+    //Its a new sequence number, we process the previous report
+
+    tag_reports_t newReport = rp;
+    sendRangingMeasurementIfAvailable(newReport);
+
+    //lastRangingSeq = seq;
 
     for (int i = 0; i < MAX_NUM_ANCS; ++i)
     {
@@ -554,7 +587,7 @@ void PosGenerator::processRangingNow(int anchorId, int tagId, double range, doub
 
   rangingTimeout = false;
 
-  sendRangingMeasurementIfAvailable();
+  
 
 
 }
@@ -657,7 +690,7 @@ void PosGenerator::processRanging(int anchorId, int tagId, double range, double 
 
     if (count >= 3) {
       canCalculatePosition = true;
-    } else if ((algorithm == ALGORITHM_KF) && (count >= 3)) {
+    } else if (algorithm == ALGORITHM_KF) {
       canCalculatePosition = true;
     }
 
@@ -681,7 +714,6 @@ void PosGenerator::processRanging(int anchorId, int tagId, double range, double 
 
       Vector3 report;
       int result = calculateTagLocationWithRangings(&report, count, &rp.rangeValue[lastSeq][0], &rp.errorEstimation[lastSeq][0], timeLag);
-      //publishPositionReport(report);
     }
     rp.rangeCount[lastSeq] = 0;
   }
@@ -692,7 +724,6 @@ void PosGenerator::processRanging(int anchorId, int tagId, double range, double 
 }
 
 void PosGenerator::publishPositionReport(Vector3 report) {
-  //PoseWithCovariance
 
   if (!std::isnan(report.x)) {
     geometry_msgs::PoseWithCovarianceStamped msg;
@@ -708,12 +739,9 @@ void PosGenerator::publishPositionReport(Vector3 report) {
       msg.pose.covariance[i] = report.covarianceMatrix(i);
     }
 
-
     msg.header.frame_id = "world";
     msg.header.stamp = ros::Time::now();
     ros_pub.publish(msg);
-    //ROS_INFO("POS: [%f, %f, %f] Angle: %f", msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, msg.pose.pose.orientation.w);
-
 
     //PATH
     nav_msgs::Path pathMsg;
@@ -726,6 +754,7 @@ void PosGenerator::publishPositionReport(Vector3 report) {
     newPos.pose.orientation.y = report.rotY;
     newPos.pose.orientation.z = report.rotZ;
     newPos.pose.orientation.w = report.rotW;
+
     newPos.header.frame_id = "world";
     newPos.header.stamp = ros::Time::now();
 
@@ -742,6 +771,42 @@ void PosGenerator::publishPositionReport(Vector3 report) {
 
     ros_pub_path.publish(pathMsg);
 
+
+  //Odometry
+  nav_msgs::Odometry odomMsg;
+
+  odomMsg.pose.pose.position.x = report.x;
+  odomMsg.pose.pose.position.y = report.y;
+  odomMsg.pose.pose.position.z = report.z;
+  odomMsg.pose.pose.orientation.x = report.rotX;
+  odomMsg.pose.pose.orientation.y = report.rotY;
+  odomMsg.pose.pose.orientation.z = report.rotZ;
+  odomMsg.pose.pose.orientation.w = report.rotW;
+
+  for (int i = 0; i < 36; i++) {
+    odomMsg.pose.covariance[i] = report.covarianceMatrix(i);
+    odomMsg.twist.covariance[i] = report.covarianceMatrix(i);
+  }
+
+  odomMsg.twist.twist.linear.x = report.linearSpeedX;
+  odomMsg.twist.twist.linear.y = report.linearSpeedY;
+  odomMsg.twist.twist.linear.z = report.linearSpeedZ;
+  odomMsg.twist.twist.angular.x = report.angularSpeedX;
+  odomMsg.twist.twist.angular.y = report.angularSpeedY;
+  odomMsg.twist.twist.angular.z = report.angularSpeedZ;
+
+  odomMsg.header.frame_id = "odom";
+  odomMsg.header.stamp =  newPos.header.stamp;
+
+  odomMsg.child_frame_id = "pioneer3at::chassis";
+
+  ros_pub_odom.publish(odomMsg);
+
+  mBroadcaster.sendTransform(
+      tf::StampedTransform(
+        tf::Transform(tf::Quaternion(report.rotX, report.rotY, report.rotZ, report.rotW), tf::Vector3(report.x, report.y, report.z)),
+        newPos.header.stamp,"odom", "pioneer3at::chassis"));
+
   }
 
 }
@@ -751,26 +816,20 @@ int PosGenerator::calculateTagLocationWithRangings(Vector3 *report, int count, i
   int result = 0;
 
   std::vector<double> rangesdb, errorEstimationsdb;
+  std::vector<Beacon> selectedBeacons;
+
   for (int i = 0; i < MAX_NUM_ANCS; i++) {
-    rangesdb.push_back((double) ranges[i] / 1000);
-    errorEstimationsdb.push_back(errorEstimation[i]);
+    if (ranges[i]>0){
+      rangesdb.push_back((double) ranges[i] / 1000);
+      errorEstimationsdb.push_back(errorEstimation[i]);
+      Beacon beacon = beacons[i];
+      selectedBeacons.push_back(beacon);
+    }
   }
 
   Vector3 position;
-
-  kalmanFilter->newUWBMeasurement(rangesdb, beacons, errorEstimationsdb, timeLag);
+  kalmanFilter->newUWBMeasurement(rangesdb, selectedBeacons, errorEstimationsdb, timeLag);
   result = RESULT_KF;
-
-  // report->x = position.x;
-  // report->y = position.y;
-  // report->z = position.z;
-
-  // report->rotX = position.rotX;
-  // report->rotY = position.rotY;
-  // report->rotZ = position.rotZ;
-  // report->rotW = position.rotW;
-
-  // report->covarianceMatrix = position.covarianceMatrix;
 
   return result;
 }
@@ -805,12 +864,14 @@ void PosGenerator::setTagOffset(int tagOffset0, int tagOffset1, int tagOffset2, 
 
 }
 
-void PosGenerator::setAlgorithm(int algorithm) {
+void PosGenerator::setAlgorithm(int algorithm, double accelerationNoise, bool ignoreWorstAnchorMode, double ignoreCostThreshold, bool mode3d) {
   this->algorithm = algorithm;
+  this->mode3d = mode3d;
+
   if (useInitPosition) {
-    this->kalmanFilter.reset(new KalmanFilter(1, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, initPosition, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, 0.05));
+    this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, initPosition, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
   } else {
-    this->kalmanFilter.reset(new KalmanFilter(1, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, 0.05));
+    this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
   }
 }
 
@@ -862,10 +923,11 @@ void PosGenerator::setAnchorsPublisher(ros::Publisher anAnchorsPub, bool enabled
   ros_pub_anchors = anAnchorsPub;
 }
 
-
 void PosGenerator::publishFixedRateReport() {
   Vector3 pose;
-  bool canSendReport = this->kalmanFilter->getPose(pose);
+  bool canSendReport = false;
+
+  canSendReport = this->kalmanFilter->getPose(pose);
 
   if (canSendReport){
     publishPositionReport(pose);

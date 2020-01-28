@@ -4,6 +4,7 @@
         <param name="jolt" type="double" value="0.1"></param>
         <param name="accelNoise" type="double" value="0.5"></param>
         <param name="magAngleOffset" type="double" value="0.0"></param>
+        <param name="algorithm" type="string" value="ALGORITHM_KF"></param>
         <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions.xml">
         </param>
         <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">

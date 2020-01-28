@@ -1,9 +1,10 @@
 #include "KalmanFilter.h"
 
 
-KalmanFilter::KalmanFilter(double accelerationNoise, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
+KalmanFilter::KalmanFilter(double accelerationNoise, bool useFixedHeight, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
     mAccelerationNoise(accelerationNoise),
     mAngularSpeed(0.0),
+    mUseFixedHeight(useFixedHeight),
     mUWBtagZ(uwbTagZ),
     mPX4FlowArmP1(px4FlowArmP1),
     mPX4FlowArmP2(px4FlowArmP2),
@@ -29,9 +30,10 @@ KalmanFilter::KalmanFilter(double accelerationNoise, double uwbTagZ, double px4F
 }
 
 
-KalmanFilter::KalmanFilter(double accelerationNoise, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
+KalmanFilter::KalmanFilter(double accelerationNoise, bool useFixedHeight, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
     mAccelerationNoise(accelerationNoise),
     mAngularSpeed(0.0),
+    mUseFixedHeight(useFixedHeight),
     mUWBtagZ(uwbTagZ),
     mPX4FlowArmP1(px4FlowArmP1),
     mPX4FlowArmP2(px4FlowArmP2),
@@ -224,7 +226,14 @@ void KalmanFilter::estimatePositionKF(bool hasRangingMeasurements, const std::ve
             ROS_INFO("KalmanFilter initPosition is NAN"); 
             if (hasRangingMeasurements) {
                 ROS_INFO("KalmanFilter Ranging mode"); 
-                mPosition = mlLocation->estimatePosition2D(rangingMeasurements, { 0.0, 0.0, mUWBtagZ });
+                if (mUseFixedHeight) {
+                    mPosition = mlLocation->estimatePosition2D(rangingMeasurements, { 0.0, 0.0, mUWBtagZ });   
+                } else {
+                    
+                    mPosition = mlLocation->estimatePosition(rangingMeasurements, { 0.0, 0.0, 0.0 });
+                    mUWBtagZ = mPosition.z; 
+                }
+                
                 ROS_INFO("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
 
                 double halfAngle = mAngle*0.5;
@@ -293,7 +302,12 @@ void KalmanFilter::stateToPose(Vector3& pose, const arma::vec& state, const arma
 
     pose.x = state(0);
     pose.y = state(1);
-    pose.z = mUWBtagZ;
+    if (mUseFixedHeight){
+        pose.z = mUWBtagZ;
+    } else {
+        pose.z = mUWBtagZ;
+    }
+    
 
     double halfAngle = state(6)*0.5;
 
@@ -406,8 +420,8 @@ arma::vec KalmanFilter::kalmanStep3D(const arma::vec& predictedState,
 
     arma::mat jacobian(countValid, 8);
     arma::mat kalmanGain;
-    arma::mat invObsCovariance = inv(observationCovariance);
-    arma::mat invEstCovariance = pinv(mEstimationCovariance);
+    arma::mat invObsCovariance = arma::inv(observationCovariance);
+    arma::mat invEstCovariance = arma::pinv(mEstimationCovariance);
 
     double cost = 1e20;
     for (int iter = 0; iter < maxSteps; iter++) {

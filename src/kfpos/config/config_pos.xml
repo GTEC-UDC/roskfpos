@@ -25,5 +25,5 @@
 	useInitPosition = 0: Uses ML Algorithm to find the initial position
 	useInitPosition = 1: Uses the position defined by initX, initY, initZ
  -->
-   <algorithm type="0" variant="0" numIgnoredRangings="2" bestMode="0" minZ="0.0" maxZ="3.0"  useInitPosition="1" initX="1.0" initY="1.0" initZ="1.048"/>
+   <algorithm type="0" variant="0" numIgnoredRangings="2" bestMode="0" minZ="0.0" maxZ="3.0"  useInitPosition="0" initX="1.0" initY="1.0" initZ="1.048"/>
 </config>

@@ -7,7 +7,7 @@
          <param name="algorithm" type="string" value="ALGORITHM_KF"></param>
          <param name="tagId" type="string" value="0"></param>
          <param name="targetDeviceId" type="string" value="tag0"></param>
-        <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions_uwb_imu.xml">
+        <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions_uwb.xml">
         </param>
         <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">
         </param>

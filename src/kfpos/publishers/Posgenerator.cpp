@@ -64,7 +64,6 @@ PosGenerator::PosGenerator() {
 
 void PosGenerator::newAnchorsMarkerArray(const visualization_msgs::MarkerArray::ConstPtr& anchorsMarkerArray){
 
-
   if (!anchorsSet && anchorsMarkerArray->markers.size()<=MAX_NUM_ANCS){
     for (int i = 0; i < anchorsMarkerArray->markers.size(); ++i)
     {
@@ -107,6 +106,17 @@ void PosGenerator::start(std::string configFilenamePos,  std::string configFilen
   mJolt = jolt;
 }
 
+
+void PosGenerator::start(ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub, int tagId) {
+  ros_pub = aPub;
+  ros_pub_path = aPathPub;
+  ros_pub_odom = aOdomPub;
+  tagIdUWB = tagId;
+  setVariantNormal();
+  useInitPosition = false;
+}
+
+
 bool PosGenerator::init(std::string filenamePos, std::string filenameTag) {
 
   try {
@@ -128,6 +138,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenameTag) {
         int use = v.second.get<int>("<xmlattr>.useFixedHeight", 0);
         useFixedHeightUWB = (use == 1);
         fixedHeightUWB = v.second.get<double>("<xmlattr>.fixedHeight", 0);
+        tagIdUWB = v.second.get<int>("<xmlattr>.tagId", 0);
       }
     }
 
@@ -240,6 +251,7 @@ bool PosGenerator::init(std::string filenamePos, std::string filenamePX4Flow, st
         int use = v.second.get<int>("<xmlattr>.useFixedHeight", 0);
         useFixedHeightUWB = (use == 1);
         fixedHeightUWB = v.second.get<double>("<xmlattr>.fixedHeight", 0);
+        tagIdUWB = v.second.get<int>("<xmlattr>.tagId", 0);
       }
     }
 
@@ -439,7 +451,7 @@ void PosGenerator::sendRangingMeasurementIfAvailable(tag_reports_t tagReport) {
 //Suponemos tagID 0
   int tagId = 0;
   bool canSend = false;
-  int minRangingsToSend = mode3d ? 1 : 1;
+  int minRangingsToSend = mode3d ? 3 : 3;
   
 tag_reports_t rp = tagReport;
  
@@ -494,35 +506,48 @@ tag_reports_t rp = tagReport;
 
 void PosGenerator::processRangingNow(int anchorId, int tagId, double range, double rawrange, double errorEstimation, int seq, bool withErrorEstimation) {
 
+
+
+
+
+
+  //We estimate the position only of the configured tag
+  if (tagId!=tagIdUWB){
+    return;
+  }
+
+ ROS_INFO("Process Ranging Now. TagId: %d, anchorId: %d", tagId, anchorId);
+
   int idx = 0, lastSeq = 0, count = 0;
   bool trilaterate = false, canCalculatePosition = false;
 
   arma::mat resultCovarianceMatrix;
-  int range_corrected = 0;
-  int tagOffset = 0;
+  // int range_corrected = 0;
+  // int tagOffset = 0;
 
-  switch (anchorId) {
-  case 0:
-    tagOffset = tagOffset0;
-    break;
-  case 1:
-    tagOffset = tagOffset1;
-    break;
-  case 2:
-    tagOffset = tagOffset2;
-    break;
-  case 3:
-    tagOffset = tagOffset3;
-    break;
-  }
+  // switch (anchorId) {
+  // case 0:
+  //   tagOffset = tagOffset0;
+  //   break;
+  // case 1:
+  //   tagOffset = tagOffset1;
+  //   break;
+  // case 2:
+  //   tagOffset = tagOffset2;
+  //   break;
+  // case 3:
+  //   tagOffset = tagOffset3;
+  //   break;
+  // }
 
 
-  if (useRawRange) {
-    range_corrected = floor(rawrange) + (tagOffset * 10);
-  } else {
-    range_corrected = floor(range) + (tagOffset * 10);
-  }
+  // if (useRawRange) {
+  //   range_corrected = floor(rawrange) + (tagOffset * 10);
+  // } else {
+  //   range_corrected = floor(range) + (tagOffset * 10);
+  // }
 
+  int range_corrected = floor(rawrange);
 
   for (idx = 0; idx < _tagList.size(); idx++) {
     if (_tagList.at(idx).id == tagId)
@@ -815,6 +840,7 @@ void PosGenerator::publishPositionReport(Vector3 report) {
 int PosGenerator::calculateTagLocationWithRangings(Vector3 *report, int count, int *ranges, double *errorEstimation, double timeLag) {
   int result = 0;
 
+  ROS_INFO("calculateTagLocationWithRangings");
   std::vector<double> rangesdb, errorEstimationsdb;
   std::vector<Beacon> selectedBeacons;
 
@@ -828,7 +854,12 @@ int PosGenerator::calculateTagLocationWithRangings(Vector3 *report, int count, i
   }
 
   Vector3 position;
-  kalmanFilter->newUWBMeasurement(rangesdb, selectedBeacons, errorEstimationsdb, timeLag);
+  if (this->algorithm==ALGORITHM_KF_UWB){
+    kalmanFilterUWB->newUWBMeasurement(rangesdb, selectedBeacons, errorEstimationsdb, timeLag);
+  } else if (algorithm==ALGORITHM_KF){
+    kalmanFilter->newUWBMeasurement(rangesdb, selectedBeacons, errorEstimationsdb, timeLag);
+  }
+
   result = RESULT_KF;
 
   return result;
@@ -867,11 +898,21 @@ void PosGenerator::setTagOffset(int tagOffset0, int tagOffset1, int tagOffset2, 
 void PosGenerator::setAlgorithm(int algorithm, double accelerationNoise, bool ignoreWorstAnchorMode, double ignoreCostThreshold, bool mode3d) {
   this->algorithm = algorithm;
   this->mode3d = mode3d;
-
-  if (useInitPosition) {
-    this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, initPosition, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
-  } else {
-    this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
+  
+  if (algorithm==ALGORITHM_KF_UWB){
+    ROS_INFO("setAlgorithm ALGORITHM_KF_UWB");
+      if (useInitPosition) {
+        this->kalmanFilterUWB.reset(new KalmanFilterUWB(accelerationNoise, initPosition, false, 0));
+      } else {
+        this->kalmanFilterUWB.reset(new KalmanFilterUWB(accelerationNoise, false, 0));
+      }
+  } else if (algorithm==ALGORITHM_KF){
+    ROS_INFO("setAlgorithm ALGORITHM_KF");
+      if (useInitPosition) {
+        this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, useFixedHeightUWB, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, initPosition, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
+      } else {
+        this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, useFixedHeightUWB, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
+      }
   }
 }
 
@@ -927,7 +968,11 @@ void PosGenerator::publishFixedRateReport() {
   Vector3 pose;
   bool canSendReport = false;
 
-  canSendReport = this->kalmanFilter->getPose(pose);
+ if (this->algorithm==ALGORITHM_KF_UWB){
+    canSendReport = this->kalmanFilterUWB->getPose(pose);
+  } else if (algorithm==ALGORITHM_KF){
+    canSendReport = this->kalmanFilter->getPose(pose);
+  }
 
   if (canSendReport){
     publishPositionReport(pose);

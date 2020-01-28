@@ -1,20 +1,21 @@
 <launch>
-    <node name="kfpos_uwb" output="screen" pkg="gtec_roskfpos" type="kfpos" launch-prefix="">
-        <param name="rate" type="int" value="25" />
-        <param name="jolt" type="double" value="0.1"></param>
-        <param name="accelNoise" type="double" value="0.5"></param>
-        <param name="magAngleOffset" type="double" value="0.0"></param>
-        <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions_uwb.xml">
-        </param>
-        <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">
-        </param>
-        <param name="configPX4Flow" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_px4flow.xml">
-        </param>
-        <param name="configUWB" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_uwb.xml">
-        </param>
-        <param name="configIMU" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_imu.xml">
-        </param>
-        <param name="configMAG" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_mag.xml">
-        </param>
+
+    <arg default="20" name="rate"></arg>
+    <arg default="0.5" name="accelNoise"></arg>
+    <arg default="0" name="magAngleOffset"></arg>
+    <arg default="tag6752" name="targetDeviceId"></arg>
+    <arg default="/gtec/toa/ranging/filtered" name="rangingTopic"></arg>
+    <arg default="/gtec/gazebo/uwb/anchors/0" name="anchorsTopic"></arg>
+    <arg default="0" name="tagId"></arg>
+    <arg default="ALGORITHM_KF_UWB" name="algorithm"></arg>
+    <node name="kfpos_uwb$(arg targetDeviceId)" output="screen" pkg="gtec_roskfpos" type="kfpos" launch-prefix="">
+        <param name="rate" type="int" value="$(arg rate)" />
+        <param name="accelNoise" type="double" value="$(arg accelNoise)"></param>
+        <param name="magAngleOffset" type="double" value="$(arg magAngleOffset)"></param>
+        <param name="targetDeviceId" type="string" value="$(arg targetDeviceId)"></param>
+        <param name="rangingTopic" type="string" value="$(arg rangingTopic)"></param>
+        <param name="anchorsTopic" type="string" value="$(arg anchorsTopic)"></param>
+        <param name="tagId" type="string" value="$(arg tagId)"></param>
+        <param name="algorithm" type="string" value="$(arg algorithm)"></param>
     </node>
 </launch>

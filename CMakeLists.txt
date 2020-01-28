@@ -49,7 +49,9 @@ set(SOURCE_FILES_KF_POS src/kfpos/publishers/node_pos.cpp
     src/kfpos/algorithms/KalmanFilter.cpp
     src/kfpos/algorithms/KalmanFilter.h 
     src/kfpos/publishers/Posgenerator.h
-    src/kfpos/publishers/Posgenerator.cpp)
+    src/kfpos/publishers/Posgenerator.cpp
+    src/kfpos/algorithms/KalmanFilterUWB.cpp
+    src/kfpos/algorithms/KalmanFilterUWB.h )
 
 
 ## Declare a cpp executable

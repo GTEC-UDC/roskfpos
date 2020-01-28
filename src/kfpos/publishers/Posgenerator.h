@@ -26,6 +26,7 @@
 
 #include "../algorithms/MLLocation.h"
 #include "../algorithms/KalmanFilter.h"
+#include "../algorithms/KalmanFilterUWB.h"
 
 #include "ros/ros.h"
 #include "std_msgs/String.h"
@@ -135,7 +136,7 @@ public:
 
     void start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag,ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,double jolt);
     void start(std::string configFilenamePos,  std::string configFilenameTag, ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,  double jolt);
-
+    void start(ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub, int tagId);
 
     void setUseRawRange(bool useRawRange);
     void setTagOffset(int tagOffset0, int tagOffset1, int tagOffset2, int tagOffset3);
@@ -202,6 +203,9 @@ private:
 
     bool useFixedHeightUWB;
     double fixedHeightUWB;
+    int tagIdUWB;
+
+
     bool usePX4Flow;
     bool useFixedHeightPX4Flow;
     double armP0PX4Flow;
@@ -241,6 +245,7 @@ private:
     void sendRangingMeasurementIfAvailable(tag_reports_t tagReport);
     Vector3 previousPos;
     std::unique_ptr<KalmanFilter> kalmanFilter;
+    std::unique_ptr<KalmanFilterUWB> kalmanFilterUWB;
     std::vector<Beacon> beacons;
     Vector3 tag0RelativePosition;
     Vector3 tag1RelativePosition;

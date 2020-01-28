@@ -16,10 +16,10 @@
 class KalmanFilter {
 public:
 
-    KalmanFilter(double accelerationNoise, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
-    KalmanFilter(double accelerationNoise, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
+    KalmanFilter(double accelerationNoise, bool useFixedHeight,  double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
+    KalmanFilter(double accelerationNoise, bool useFixedHeight,  double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
 
-     void newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, double covarianceVelocity, double covarianceGyroZ, int quality);
+    void newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, double covarianceVelocity, double covarianceGyroZ, int quality);
     void newUWBMeasurement(const std::vector<double>& rangings, const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag);
     void newIMUMeasurement( double angularVelocityZ,double covarianceAngularVelocityZ,double linearAccelerationX,double linearAccelerationY, double covarianceAccelerationXY[4]);
     void newMAGMeasurement( double magX,double magY,double covarianceMag);
@@ -84,6 +84,7 @@ private:
     arma::mat mEstimationCovariance;
 
     double mUWBtagZ;
+    bool mUseFixedHeight;
 
     bool mUseFixedInitialPosition;
     double mPX4FlowArmP1, mPX4FlowArmP2;

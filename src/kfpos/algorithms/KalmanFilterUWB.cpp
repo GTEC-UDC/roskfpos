@@ -37,8 +37,6 @@ KalmanFilterUWB::KalmanFilterUWB(double accelerationNoise, bool ignoreWorstAncho
 
 void KalmanFilterUWB::newUWBMeasurement(const std::vector<double>& rangings,
                                         const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag) {
-
-    ROS_INFO("KalmanFilterUWB newUWBMeasurement");
     
     std::vector<RangingMeasurement> measurements;
 
@@ -68,8 +66,6 @@ void KalmanFilterUWB::estimatePositionKF(const std::vector<RangingMeasurement>& 
     //}
     std::vector<RangingMeasurement> rangingMeasurements(allRangingMeasurements);
 
-    ROS_INFO("KalmanFilterUWB estimatePositionKF start");
-
     double timeLag;
 
     auto now = std::chrono::steady_clock::now();
@@ -94,10 +90,9 @@ void KalmanFilterUWB::estimatePositionKF(const std::vector<RangingMeasurement>& 
 
         if (std::isnan(mPosition.x) || std::isnan(mPosition.y) || std::isnan(mPosition.z)) {
 
-            ROS_INFO("KalmanFilterUWB Ranging mode");
             //TODO: hay que modificar lo siguiente para que acepte el nuevo formato de datos
             mPosition = mlLocation->estimatePosition(rangingMeasurements, { 0.0, 0.0, 0.0 });
-            ROS_INFO("KalmanFilterUWB new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z);
+            ROS_DEBUG("KalmanFilterUWB new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z);
 
             //mPosition.covarianceMatrix = arma::eye<arma::mat>(3, 3) * 0.01;
 
@@ -152,7 +147,7 @@ void KalmanFilterUWB::estimatePositionKF(const std::vector<RangingMeasurement>& 
         //We can ignore ONE anchor if its behaviour is different from the rest
         //double costThreshold = 0.5;
          //ROS_INFO("Cost Threshold %f", _ignoreCostThreshold);
-        ROS_INFO("KalmanFilterUWB Ignore mode");
+        ROS_DEBUG("KalmanFilterUWB Ignore mode");
         newState = kalmanStep3DCanIgnoreAnAnchor(predictedState, allRangingMeasurements, 10, 1e-3, timeLag, _ignoreCostThreshold);
     } else {
         StateWithIgnoredAnchor stateWithIgnored = kalmanStep3DIgnoreAnchor(predictedState, allRangingMeasurements, 10, 1e-3, timeLag, -1); //-1 => all anchors used
@@ -160,7 +155,6 @@ void KalmanFilterUWB::estimatePositionKF(const std::vector<RangingMeasurement>& 
         newState.estimationCovariance = stateWithIgnored.estimationCovariance;
     }
 
-     ROS_INFO("KalmanFilterUWB New state created");
     //ROS_INFO("KalmanFilterUWB estimatePositionKF end state");
 
     estimationCovariance = newState.estimationCovariance;
@@ -212,12 +206,12 @@ StateWithCovariance KalmanFilterUWB::kalmanStep3DCanIgnoreAnAnchor(const arma::v
     //With index=-1, no ignored anchors
     StateWithIgnoredAnchor stateWithAllAnchors = kalmanStep3DIgnoreAnchor(predictedState, allRangingMeasurements, maxSteps, minRelativeError, timeLag, -1);
 
-    ROS_INFO("kalmanStep3DCanIgnoreAnAnchor stateWithAllAnchors end");
+    ROS_DEBUG("kalmanStep3DCanIgnoreAnAnchor stateWithAllAnchors end");
    
 
     for (int i = 0; i < allRangingMeasurements.size(); ++i)
     {
-         ROS_INFO("kalmanStep3DCanIgnoreAnAnchor StateWithIgnored  Anchor: %d", i);
+         ROS_DEBUG("kalmanStep3DCanIgnoreAnAnchor StateWithIgnored  Anchor: %d", i);
         auto& ignoredRanging = allRangingMeasurements[i];
         StateWithIgnoredAnchor stateWithIgnoredAnchor = kalmanStep3DIgnoreAnchor(predictedState, allRangingMeasurements, maxSteps, minRelativeError, timeLag, i);
         double x = stateWithIgnoredAnchor.state(0);
@@ -226,7 +220,7 @@ StateWithCovariance KalmanFilterUWB::kalmanStep3DCanIgnoreAnAnchor(const arma::v
         double distanceToIgnoredAnchor = sqrt(pow(ignoredRanging.beacon.position.x - x, 2) + pow(ignoredRanging.beacon.position.y - y, 2) + pow(ignoredRanging.beacon.position.z - z, 2));
 
         double distanceDiffAnchor = ignoredRanging.ranging -distanceToIgnoredAnchor;
-        ROS_INFO("kalmanStep3DCanIgnoreAnAnchor StateWithIgnored  Anchor: %d END", i);
+        ROS_DEBUG("kalmanStep3DCanIgnoreAnAnchor StateWithIgnored  Anchor: %d END", i);
         if (i == 0 || distanceDiffAnchor > maxDistance) {
             maxDistance = distanceDiffAnchor;
             worstIgnoredCost = stateWithIgnoredAnchor.cost;
@@ -241,7 +235,7 @@ StateWithCovariance KalmanFilterUWB::kalmanStep3DCanIgnoreAnAnchor(const arma::v
     result.state = stateWithAllAnchors.state;
     result.estimationCovariance = stateWithAllAnchors.estimationCovariance;
 
-    ROS_INFO("kalmanStep3DCanIgnoreAnAnchor Max distances %f  Anchor: %d", maxDistance, ignoredAnchorIndex);
+    ROS_DEBUG("kalmanStep3DCanIgnoreAnAnchor Max distances %f  Anchor: %d", maxDistance, ignoredAnchorIndex);
     
     if (maxDistance > 0) {
         double costDiffWithWorstAnchor =  stateWithAllAnchors.cost -  worstIgnoredCost;
@@ -285,10 +279,10 @@ StateWithIgnoredAnchor KalmanFilterUWB::kalmanStep3DIgnoreAnchor(const arma::vec
     arma::vec measurements(countValid);
 
 
-    ROS_INFO("KalmanFilterUWB ML Position");
+    ROS_DEBUG("KalmanFilterUWB ML Position");
     Vector3 mlTempPosition = mlLocation->estimatePosition(rangingMeasurements, { newState(0), newState(1), newState(2) });
     double mlRangingError = mlLocation->estimationError(rangingMeasurements, mlTempPosition);
-    ROS_INFO("KalmanFilterUWB mlRanginError: %f", mlRangingError);
+    ROS_DEBUG("KalmanFilterUWB mlRanginError: %f", mlRangingError);
 
     for (int i = 0; i < rangingMeasurements.size(); ++i)
     {
@@ -331,7 +325,7 @@ StateWithIgnoredAnchor KalmanFilterUWB::kalmanStep3DIgnoreAnchor(const arma::vec
 
         arma::vec direction = predictionDiff + kalmanGain * (predictionError - jacobian * predictionDiff);
         newState = newState + direction;
-        ROS_INFO("KalmanFilterUWB cost: %f", cost);
+        ROS_DEBUG("KalmanFilterUWB cost: %f", cost);
 
 
     }

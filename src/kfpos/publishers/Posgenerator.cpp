@@ -68,21 +68,21 @@ void PosGenerator::newAnchorsMarkerArray(const visualization_msgs::MarkerArray::
     for (int i = 0; i < anchorsMarkerArray->markers.size(); ++i)
     {
       visualization_msgs::Marker marker = anchorsMarkerArray->markers[i];
-      _ancArray[i].id = i;
+      _ancArray[i].id = marker.id;
       _ancArray[i].label = "";
       _ancArray[i].x = marker.pose.position.x;
       _ancArray[i].y = marker.pose.position.y;
       _ancArray[i].z = marker.pose.position.z;
-      beacons.push_back({ i, { _ancArray[i].x, _ancArray[i].y, _ancArray[i].z } });
+      beacons.push_back({ marker.id, i, { _ancArray[i].x, _ancArray[i].y, _ancArray[i].z } });
     }
     anchorsSet = true;
     ROS_INFO("Anchors set");
 
     for (int i = 0; i < beacons.size(); ++i)
     {
-      
       Beacon beacon= beacons[i];
-      ROS_INFO("Anchors: %d  (%f, %f, %f)", i, beacon.position.x, beacon.position.y, beacon.position.z);
+      _anchorIndexById[beacon.id] = beacon.index;
+      ROS_INFO("Anchors: %d [%d]  (%f, %f, %f)", beacon.index, beacon.id,  beacon.position.x, beacon.position.y, beacon.position.z);
     }
   }
   
@@ -448,12 +448,11 @@ void PosGenerator::timerRangingCallback(const ros::TimerEvent& event){
 
 void PosGenerator::sendRangingMeasurementIfAvailable(tag_reports_t tagReport) {
 
-//Suponemos tagID 0
-  int tagId = 0;
+  int tagId = tagIdUWB;
   bool canSend = false;
   int minRangingsToSend = mode3d ? 3 : 3;
   
-tag_reports_t rp = tagReport;
+  tag_reports_t rp = tagReport;
  
   if (rp.rangeSeq != -1) {
 
@@ -470,7 +469,7 @@ tag_reports_t rp = tagReport;
 
 
     if (canSend) {
-      ROS_INFO("Can send measurements"); 
+      ROS_DEBUG("Can send measurements"); 
       //ROS_INFO("Sending %d ranging measurements",rp.rangeCount[lastRangingSeq]); 
 
       //Paramos el timer de ranging
@@ -478,7 +477,7 @@ tag_reports_t rp = tagReport;
 
 
       int count = rp.rangeCount[rp.rangeSeq];
-      ROS_INFO("Sending %d rangings", count);
+      ROS_DEBUG("Sending %d rangings", count);
       double timeLag;
       auto now = std::chrono::steady_clock::now();
 
@@ -506,47 +505,17 @@ tag_reports_t rp = tagReport;
 
 void PosGenerator::processRangingNow(int anchorId, int tagId, double range, double rawrange, double errorEstimation, int seq, bool withErrorEstimation) {
 
-
-
-
-
-
   //We estimate the position only of the configured tag
   if (tagId!=tagIdUWB){
     return;
   }
 
- ROS_INFO("Process Ranging Now. TagId: %d, anchorId: %d", tagId, anchorId);
+ ROS_DEBUG("Process Ranging Now. TagId: %d, anchorId: %d", tagId, anchorId);
 
   int idx = 0, lastSeq = 0, count = 0;
   bool trilaterate = false, canCalculatePosition = false;
 
   arma::mat resultCovarianceMatrix;
-  // int range_corrected = 0;
-  // int tagOffset = 0;
-
-  // switch (anchorId) {
-  // case 0:
-  //   tagOffset = tagOffset0;
-  //   break;
-  // case 1:
-  //   tagOffset = tagOffset1;
-  //   break;
-  // case 2:
-  //   tagOffset = tagOffset2;
-  //   break;
-  // case 3:
-  //   tagOffset = tagOffset3;
-  //   break;
-  // }
-
-
-  // if (useRawRange) {
-  //   range_corrected = floor(rawrange) + (tagOffset * 10);
-  // } else {
-  //   range_corrected = floor(range) + (tagOffset * 10);
-  // }
-
   int range_corrected = floor(rawrange);
 
   for (idx = 0; idx < _tagList.size(); idx++) {
@@ -564,15 +533,17 @@ void PosGenerator::processRangingNow(int anchorId, int tagId, double range, doub
   
   timestampLastRanging = std::chrono::steady_clock::now();
 
+  int anchorIndex = _anchorIndexById[anchorId];
+
   if (rp.rangeSeq == seq)
   {
     //We are receiving a range with the current seq number
     rp.rangeCount[seq]++;
     rp.rangeSeq = seq;
-    rp.rangeValue[seq][anchorId] = range_corrected;
+    rp.rangeValue[seq][anchorIndex] = range_corrected;
 
     if (withErrorEstimation) {
-      rp.errorEstimation[seq][anchorId] = errorEstimation;
+      rp.errorEstimation[seq][anchorIndex] = errorEstimation;
     }
   } else
   {
@@ -598,8 +569,8 @@ void PosGenerator::processRangingNow(int anchorId, int tagId, double range, doub
 
     rp.rangeCount[seq] = 1;
     rp.rangeSeq = seq;
-    rp.rangeValue[seq][anchorId] = range_corrected;
-    rp.errorEstimation[seq][anchorId] = errorEstimation;
+    rp.rangeValue[seq][anchorIndex] = range_corrected;
+    rp.errorEstimation[seq][anchorIndex] = errorEstimation;
   }
 
   _tagList.at(idx) = rp;
@@ -780,6 +751,8 @@ void PosGenerator::publishPositionReport(Vector3 report) {
     newPos.pose.orientation.z = report.rotZ;
     newPos.pose.orientation.w = report.rotW;
 
+    printf("(%f, %f, %f)\r", report.x, report.y, report.z);
+
     newPos.header.frame_id = "world";
     newPos.header.stamp = ros::Time::now();
 
@@ -840,7 +813,6 @@ void PosGenerator::publishPositionReport(Vector3 report) {
 int PosGenerator::calculateTagLocationWithRangings(Vector3 *report, int count, int *ranges, double *errorEstimation, double timeLag) {
   int result = 0;
 
-  ROS_INFO("calculateTagLocationWithRangings");
   std::vector<double> rangesdb, errorEstimationsdb;
   std::vector<Beacon> selectedBeacons;
 
@@ -900,14 +872,14 @@ void PosGenerator::setAlgorithm(int algorithm, double accelerationNoise, bool ig
   this->mode3d = mode3d;
   
   if (algorithm==ALGORITHM_KF_UWB){
-    ROS_INFO("setAlgorithm ALGORITHM_KF_UWB");
+    ROS_DEBUG("setAlgorithm ALGORITHM_KF_UWB");
       if (useInitPosition) {
         this->kalmanFilterUWB.reset(new KalmanFilterUWB(accelerationNoise, initPosition, false, 0));
       } else {
         this->kalmanFilterUWB.reset(new KalmanFilterUWB(accelerationNoise, false, 0));
       }
   } else if (algorithm==ALGORITHM_KF){
-    ROS_INFO("setAlgorithm ALGORITHM_KF");
+    ROS_DEBUG("setAlgorithm ALGORITHM_KF");
       if (useInitPosition) {
         this->kalmanFilter.reset(new KalmanFilter(accelerationNoise, useFixedHeightUWB, fixedHeightUWB, armP0PX4Flow, armP1PX4Flow, initPosition, fixedHeightPX4Flow, initAnglePX4Flow, magAngleOffset, mJolt));
       } else {

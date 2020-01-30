@@ -23,6 +23,7 @@
 #include <iostream>
 #include <math.h>
 #include <chrono>
+#include <unordered_map>
 
 #include "../algorithms/MLLocation.h"
 #include "../algorithms/KalmanFilter.h"
@@ -96,8 +97,8 @@ typedef struct
     bool ready;
     int rangeSeq;
     int rangeCount[256];
-    int rangeValue[256][MAX_NUM_ANCS]; //(mm) each tag ranges to 4 anchors - it has a range number which is modulo 256
-    double errorEstimation[256][MAX_NUM_ANCS]; //GTEC ADD
+    int rangeValue[256][MAX_NUM_ANCS];
+    double errorEstimation[256][MAX_NUM_ANCS];
 } tag_reports_t;
 
 
@@ -196,6 +197,8 @@ private:
 
     anc_struct_t _ancArray[MAX_NUM_ANCS];
     std::vector <tag_reports_t> _tagList;
+    std::unordered_map<int, int> _anchorIndexById;
+
     bool useRawRange;
     bool useTwoTags;
     bool useInitPosition;

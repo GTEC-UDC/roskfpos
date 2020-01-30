@@ -15,6 +15,7 @@ struct Vector3 {
 
 struct Beacon {
 	int id;
+	int index;
 	Vector3 position;
 };
 

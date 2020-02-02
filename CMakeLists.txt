@@ -50,8 +50,13 @@ set(SOURCE_FILES_KF_POS src/kfpos/publishers/node_pos.cpp
     src/kfpos/algorithms/KalmanFilter.h 
     src/kfpos/publishers/Posgenerator.h
     src/kfpos/publishers/Posgenerator.cpp
-    src/kfpos/algorithms/KalmanFilterUWB.cpp
-    src/kfpos/algorithms/KalmanFilterUWB.h )
+    src/kfpos/algorithms/KalmanFilterTOA.cpp
+    src/kfpos/algorithms/KalmanFilterTOA.h 
+    src/kfpos/algorithms/KalmanFilterTOAIMU.cpp
+    src/kfpos/algorithms/KalmanFilterTOAIMU.h 
+    src/kfpos/algorithms/PositionEstimationAlgorithm.cpp
+    src/kfpos/algorithms/PositionEstimationAlgorithm.h 
+    )
 
 
 ## Declare a cpp executable

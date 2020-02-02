@@ -1,50 +1,68 @@
 #ifndef KALMAN_FILTER_PX4FLOW_H
 #define KALMAN_FILTER_PX4FLOW_H
 
+
+#define BOOST_NO_CXX11_SCOPED_ENUMS
+#include <boost/asio.hpp>
+#include <boost/asio/serial_port.hpp>
+#include <boost/system/error_code.hpp>
+#include <boost/system/system_error.hpp>
+#include <boost/bind.hpp>
+#include <boost/thread.hpp>
+#include <boost/assert.hpp>
+#include <boost/property_tree/xml_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+
+#include "PositionEstimationAlgorithm.h"
 #include "MLLocation.h"
-#include "ros/ros.h"
 #include <math.h>
 #include <chrono>
-#include "sensor_types.h"
-
 
 #define UWB_RANGING 0
 #define PX4FLOW 1
 #define IMU 2
 #define MAG 3
 
-class KalmanFilter {
+class KalmanFilter: public PositionEstimationAlgorithm {
 public:
 
-    KalmanFilter(double accelerationNoise, bool useFixedHeight,  double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
-    KalmanFilter(double accelerationNoise, bool useFixedHeight,  double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle, double magAngleOffset, double jolt);
+    KalmanFilter(double accelerationNoise, double initialAngle, double jolt, std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag);
+    KalmanFilter(double accelerationNoise, double initialAngle, double jolt, std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag, Vector3 initialPosition);
 
-    void newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, double covarianceVelocity, double covarianceGyroZ, int quality);
+
+    
+
+/*    void setUWBOptions(bool useFixedHeight,  double uwbTagZ);
+    void setPx4Options(double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight);
+    void setMagOptions(double magAngleOffset);
+    void setImuOptions(bool useFixedCovarianceAcceleration, double fixedCovarianceAcceleration);*/
+
+
+/*    void newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, double covarianceVelocity, double covarianceGyroZ, int quality);
     void newUWBMeasurement(const std::vector<double>& rangings, const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag);
     void newIMUMeasurement( double angularVelocityZ,double covarianceAngularVelocityZ,double linearAccelerationX,double linearAccelerationY, double covarianceAccelerationXY[4]);
     void newMAGMeasurement( double magX,double magY,double covarianceMag);
     void newCompassMeasurement( double compass,double covarianceCompass);
-    bool getPose(Vector3& pose);
+    bool getPose(Vector3& pose);*/
+
+    bool init() override;
+    bool getPose(Vector3& pose) override;
+    void newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, int quality) override;
+    void newTOAMeasurement(const std::vector<double>& rangings, const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag) override;
+    void newIMUMeasurement( VectorDim3 angularVelocity,double covarianceAngularVelocity[9],VectorDim3 linearAcceleration, double covarianceAcceleration[9]) override;
+    void newMAGMeasurement( VectorDim3 mag, double covarianceMag[9]) override;
+    void newCompassMeasurement( double compass) override;
 
 private:
-
+    bool loadConfigurationFiles(std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag);
     void estimatePositionKF(bool hasRangingMeasurements, const std::vector<RangingMeasurement>& rangingMeasurements,
                                                 bool hasPX4Measurement, const PX4FlowMeasurement& px4flowMeasurement, 
                                                 bool hasImuMeasurement,const ImuMeasurement& imuMeasurement,
                                                 bool hasMagMeasurement,const MagMeasurement& magMeasurement);
 
-    struct PX4FLOWOutput {
-        double vX;
-        double vY;
-        double gyroZ;
-    };
-
-    struct ImuOutput {
-        double accelX;
-        double accelY;
-        double gyroZ;
-        double orientationW;
-    };
     
     arma::vec kalmanStep3D(const arma::vec& predictedState, 
                             bool hasRangingMeasurements, const std::vector<RangingMeasurement>& allRangingMeasurements, 
@@ -70,39 +88,48 @@ private:
     ImuOutput imuOutput(const Vector3& acceleration, double angle, double angularSpeed) const;
 
 
-
+    //Algorithm
     double mJolt;
-
     Vector3 mPosition;
     Vector3 mVelocity;
     Vector3 mAcceleration;
     double mAngle;
     double mAngularSpeed;
-
     double mTimeLag;
     double mAccelerationNoise;
     arma::mat mEstimationCovariance;
-
-    double mUWBtagZ;
-    bool mUseFixedHeight;
-
     bool mUseFixedInitialPosition;
-    double mPX4FlowArmP1, mPX4FlowArmP2;
-    double mPX4flowHeight;
-
-    double mMagAngleOffset;
-
     MLLocation *mlLocation;
-
     std::chrono::steady_clock::time_point mLastKFTimestamp;
-
-
     MagMeasurement lastMagMeasurement;
     bool mHasMagMeasurement;
     PX4FlowMeasurement lastPX4FlowMeasurement;
     bool mHasPX4FlowMeasurement;
     ImuMeasurement lastImuMeasurement;
     bool mHasImuMeasurement;
+
+
+    std::string mFilenamePos, mFilenamePX4Flow, mFilenameTag, mFilenameImu, mFilenameMag;
+
+    //TOA
+    double mUWBtagZ;
+    bool mUseFixedHeight;
+    int mTagIdUWB;
+
+    //IMU
+    bool mUseImuFixedCovarianceAcceleration, mUseImuFixedCovarianceAngularVelocityZ;
+    double mImuCovarianceAcceleration, mUmuCovarianceAngularVelocityZ;
+    
+    //PX4Flow
+    double mPX4FlowArmP1, mPX4FlowArmP2;
+    double mPX4flowHeight;
+    bool mUseFixedHeightPX4Flow;
+    double mInitAnglePX4Flow, mCovarianceVelocityPX4Flow, mCovarianceGyroZPX4Flow;
+
+    //MAG
+    double mMagAngleOffset, mCovarianceMag;
+
+
 
 };
 

@@ -1,35 +1,42 @@
 <launch>
-    <arg default="1" name="use_uwb">
-    </arg>
-    <arg default="1" name="use_imu">
-    </arg>
-    <arg default="1" name="use_mag">
-    </arg>
-    <arg default="1" name="use_px4">
-    </arg>
-    <node launch-prefix="" name="kfpos" output="screen" pkg="gtec_roskfpos" type="kfpos">
+    <arg default="1" name="use_uwb"></arg>
+    <arg default="1" name="use_imu"></arg>
+    <arg default="1" name="use_mag"></arg>
+    <arg default="1" name="use_px4"></arg>
+    <arg default="/gtec/toa/ranging" name="rangingTopic"></arg>
+    <arg default="/gtec/toa/anchors" name="anchorsTopic"></arg>
+    <arg default="/gtec/gazebo/imu" name="imuTopic"></arg>
+    <arg default="/gtec/gazebo/mag" name="magTopic"></arg>
+    <arg default="/gtec/gazebo/px4flow" name="px4Topic"></arg>
+    <arg name="targetDeviceId" default="aDevice" ></arg>
+    <arg name="useStartPosition" default="0" ></arg>
+    <arg name="initAngle" default="0.0" ></arg>
+    <arg name="initPositionX" default="0.0" ></arg>
+    <arg name="initPositionY" default="0.0" ></arg>
+    <arg name="initPositionZ" default="0.0" ></arg>
+    <node name="kfpos_multi_$(arg targetDeviceId)" output="screen" pkg="gtec_roskfpos" type="kfpos" launch-prefix="">
         <param name="rate" type="int" value="30"></param>
         <param name="jolt" type="double" value="0.5"></param>
-        <param name="configSubscriptions" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_subscriptions.xml">
-        </param>
-        <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml">
-        </param>
-        <param name="configPX4Flow" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_px4flow.xml">
-        </param>
-        <param name="configUWB" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_uwb.xml">
-        </param>
-        <param name="configIMU" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_imu.xml">
-        </param>
-        <param name="configMAG" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_mag.xml">
-        </param>
-         <param name="algorithm" type="string" value="ALGORITHM_KF"></param>
-        <param name="use_uwb" type="int" value="$(arg use_uwb)">
-        </param>
-        <param name="use_imu" type="int" value="$(arg use_imu)">
-        </param>
-        <param name="use_mag" type="int" value="$(arg use_mag)">
-        </param>
-        <param name="use_px4" type="int" value="$(arg use_px4)">
-        </param>
+        <param name="accelNoise" type="double" value="0.5"></param>
+        <param name="algorithm" type="string" value="ALGORITHM_KF"></param>
+        <param name="configPos" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_pos.xml"></param>
+        <param name="configPX4Flow" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_px4flow.xml"></param>
+        <param name="configUWB" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_uwb.xml"></param>
+        <param name="configIMU" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_imu.xml"></param>
+        <param name="configMAG" textfile="$(find gtec_roskfpos)/src/kfpos/config/config_mag.xml"></param>
+        <param name="use_uwb" type="int" value="$(arg use_uwb)"></param>
+        <param name="use_imu" type="int" value="$(arg use_imu)"></param>
+        <param name="use_mag" type="int" value="$(arg use_mag)"></param>
+        <param name="use_px4" type="int" value="$(arg use_px4)"></param>
+        <param name="rangingTopic" type="string" value="$(arg rangingTopic)"></param>
+        <param name="anchorsTopic" type="string" value="$(arg anchorsTopic)"></param>
+        <param name="imuTopic" type="string" value="$(arg imuTopic)"></param>
+        <param name="magTopic" type="string" value="$(arg magTopic)"></param>
+        <param name="px4Topic" type="string" value="$(arg px4Topic)"></param>
+        <param name="useStartPosition" type="int" value="$(arg useStartPosition)" />
+        <param name="initAngle" type="double" value="$(arg initAngle)" />
+        <param name="initPositionX" type="double" value="$(arg initPositionX)" />
+        <param name="initPositionY" type="double" value="$(arg initPositionY)" />
+        <param name="initPositionZ" type="double" value="$(arg initPositionZ)" />
     </node>
 </launch>

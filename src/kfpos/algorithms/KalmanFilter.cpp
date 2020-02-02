@@ -1,47 +1,19 @@
 #include "KalmanFilter.h"
 
 
-KalmanFilter::KalmanFilter(double accelerationNoise, bool useFixedHeight, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, Vector3 initialPosition, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
+
+
+KalmanFilter::KalmanFilter(double accelerationNoise, double initialAngle, double jolt, std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag) :
     mAccelerationNoise(accelerationNoise),
     mAngularSpeed(0.0),
-    mUseFixedHeight(useFixedHeight),
-    mUWBtagZ(uwbTagZ),
-    mPX4FlowArmP1(px4FlowArmP1),
-    mPX4FlowArmP2(px4FlowArmP2),
-    mPX4flowHeight(px4flowHeight),
-    mPosition(initialPosition),
-    mAngle(initialAngle),
-    mUseFixedInitialPosition(true),
-    mMagAngleOffset(magAngleOffset),
-    mJolt(jolt)
-{
-    MLLocation *mlLocation = new MLLocation();
-
-    mVelocity = { 0, 0, 0};
-    mAcceleration = { 0, 0, 0};
-
-     mHasMagMeasurement=false;
-     mHasPX4FlowMeasurement=false;
-     mHasImuMeasurement=false;
-
-    mEstimationCovariance.zeros(8, 8);
-    mLastKFTimestamp =  std::chrono::steady_clock::time_point::min();
-    ROS_INFO("KalmanFilter constructor end wit FixedInitialPosition = TRUE");
-}
-
-
-KalmanFilter::KalmanFilter(double accelerationNoise, bool useFixedHeight, double uwbTagZ, double px4FlowArmP1, double px4FlowArmP2, double px4flowHeight, double initialAngle,double magAngleOffset, double jolt) :
-    mAccelerationNoise(accelerationNoise),
-    mAngularSpeed(0.0),
-    mUseFixedHeight(useFixedHeight),
-    mUWBtagZ(uwbTagZ),
-    mPX4FlowArmP1(px4FlowArmP1),
-    mPX4FlowArmP2(px4FlowArmP2),
-    mPX4flowHeight(px4flowHeight),
     mAngle(initialAngle),
     mUseFixedInitialPosition(false),
-    mMagAngleOffset(magAngleOffset),
-    mJolt(jolt)
+    mJolt(jolt),
+    mFilenamePos(filenamePos), 
+    mFilenamePX4Flow(filenamePX4Flow), 
+    mFilenameTag(filenameTag), 
+    mFilenameImu(filenameImu), 
+    mFilenameMag(filenameMag)
 {
     MLLocation *mlLocation = new MLLocation();
 
@@ -49,18 +21,48 @@ KalmanFilter::KalmanFilter(double accelerationNoise, bool useFixedHeight, double
     mVelocity = { 0, 0, 0};
     mAcceleration = { 0, 0, 0};
 
-     mHasMagMeasurement=false;
+    mHasMagMeasurement=false;
     mHasPX4FlowMeasurement=false;
-     mHasImuMeasurement=false;
+    mHasImuMeasurement=false;
 
     mEstimationCovariance.zeros(8, 8);
     mLastKFTimestamp =  std::chrono::steady_clock::time_point::min();
-    ROS_INFO("KalmanFilter constructor end wit FixedInitialPosition = FALSE");
 }
 
 
-void KalmanFilter::newUWBMeasurement(const std::vector<double>& rangings,
-        const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag) {
+
+KalmanFilter::KalmanFilter(double accelerationNoise, double initialAngle, double jolt , std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag, Vector3 initialPosition):
+    mAccelerationNoise(accelerationNoise),
+    mAngularSpeed(0.0),
+    mAngle(initialAngle),
+    mUseFixedInitialPosition(true),
+    mJolt(jolt),
+    mFilenamePos(filenamePos), 
+    mFilenamePX4Flow(filenamePX4Flow), 
+    mFilenameTag(filenameTag), 
+    mFilenameImu(filenameImu), 
+    mFilenameMag(filenameMag)
+{
+    MLLocation *mlLocation = new MLLocation();
+
+    mPosition = initialPosition;
+    mVelocity = { 0, 0, 0};
+    mAcceleration = { 0, 0, 0};
+
+    mHasMagMeasurement=false;
+    mHasPX4FlowMeasurement=false;
+    mHasImuMeasurement=false;
+
+    mEstimationCovariance.zeros(8, 8);
+    mLastKFTimestamp =  std::chrono::steady_clock::time_point::min();
+}
+
+bool KalmanFilter::init()  {
+    return loadConfigurationFiles(mFilenamePos, mFilenamePX4Flow, mFilenameTag, mFilenameImu, mFilenameMag);
+}
+
+void KalmanFilter::newTOAMeasurement(const std::vector<double>& rangings,
+        const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag){
 
     std::vector<RangingMeasurement> measurements;
 
@@ -95,7 +97,7 @@ void KalmanFilter::newUWBMeasurement(const std::vector<double>& rangings,
 }
 
 
-void KalmanFilter::newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, double covarianceVelocity, double covarianceGyroZ, int quality) {
+void KalmanFilter::newPX4FlowMeasurement(double integrationX, double integrationY, double integrationRotationZ, double integrationTime, int quality) {
 
 
     PX4FlowMeasurement measurement;
@@ -111,14 +113,14 @@ void KalmanFilter::newPX4FlowMeasurement(double integrationX, double integration
     }
 
     if (integrationTime>0){
-       measurement.covarianceVelocity = covarianceVelocity/measurement.integrationTime*mPX4flowHeight/quality;  
+       measurement.covarianceVelocity = mCovarianceVelocityPX4Flow/measurement.integrationTime*mPX4flowHeight/quality;  
    } else {
     //TODO: We artificially increase the covariance error if integrationTime=0
     //This shouldn't happen if quality > 0
-       measurement.covarianceVelocity = covarianceVelocity*quality;
+       measurement.covarianceVelocity = mCovarianceVelocityPX4Flow*quality;
    }
    
-    measurement.covarianceGyroZ = covarianceGyroZ;
+    measurement.covarianceGyroZ = mCovarianceGyroZPX4Flow;
 
     ImuMeasurement voidMeasurement;
     MagMeasurement voidMeasurementMag;
@@ -131,13 +133,34 @@ void KalmanFilter::newPX4FlowMeasurement(double integrationX, double integration
 }
 
 
-void KalmanFilter::newIMUMeasurement( double angularVelocityZ,double covarianceAngularVelocityZ,double linearAccelerationX,double linearAccelerationY, double covarianceAccelerationXY[4]){
-   
+
+void KalmanFilter::newIMUMeasurement( VectorDim3 angularVelocity,double covarianceAngularVelocity[9],VectorDim3 linearAcceleration, double covarianceAcceleration[9]) {
+
+    double covarianceAccelerationXY[4];
+
+    if (mUseImuFixedCovarianceAcceleration) {
+      covarianceAccelerationXY[0] = mImuCovarianceAcceleration;
+      covarianceAccelerationXY[1] = covarianceAcceleration[1];
+      covarianceAccelerationXY[2] = covarianceAcceleration[3];
+      covarianceAccelerationXY[3] = mImuCovarianceAcceleration;
+    } else {
+      covarianceAccelerationXY[0] = covarianceAcceleration[0];
+      covarianceAccelerationXY[1] = covarianceAcceleration[1];
+      covarianceAccelerationXY[2] = covarianceAcceleration[3];
+      covarianceAccelerationXY[3] = covarianceAcceleration[4];
+    }
+
+    double covAngularVelocityZ = covarianceAngularVelocity[8];
+    if (mUseImuFixedCovarianceAngularVelocityZ) {
+      covAngularVelocityZ = mUmuCovarianceAngularVelocityZ;
+    }
+
+
     ImuMeasurement measurement;
-    measurement.angularVelocityZ= angularVelocityZ;
-    measurement.covarianceAngularVelocityZ= covarianceAngularVelocityZ;
-    measurement.linearAccelerationX = linearAccelerationX;
-    measurement.linearAccelerationY = linearAccelerationY;
+    measurement.angularVelocityZ= angularVelocity.z;
+    measurement.covarianceAngularVelocityZ= covAngularVelocityZ;
+    measurement.linearAccelerationX = linearAcceleration.x;
+    measurement.linearAccelerationY = linearAcceleration.y;
     measurement.covarianceAccelerationXY[0] = covarianceAccelerationXY[0];
     measurement.covarianceAccelerationXY[1] = covarianceAccelerationXY[1];
     measurement.covarianceAccelerationXY[2] = covarianceAccelerationXY[2];
@@ -151,13 +174,13 @@ void KalmanFilter::newIMUMeasurement( double angularVelocityZ,double covarianceA
 
     estimatePositionKF(false, std::vector<RangingMeasurement>() , false, voidMeasurement , true, measurement, false, voidMeasurementMag);
 }
+ 
 
-
-void KalmanFilter::newMAGMeasurement( double magX,double magY,double covarianceMag){
+void KalmanFilter::newMAGMeasurement( VectorDim3 mag, double covarianceMag[9])  {
 
     MagMeasurement measurement;
-    measurement.angle = atan2(magY, magX) - mMagAngleOffset;
-    measurement.covarianceMag = covarianceMag;
+    measurement.angle = atan2(mag.y, mag.x) - mMagAngleOffset;
+    measurement.covarianceMag = mCovarianceMag;
 
     PX4FlowMeasurement voidMeasurementPx4;
     ImuMeasurement voidMeasurement;
@@ -169,14 +192,14 @@ void KalmanFilter::newMAGMeasurement( double magX,double magY,double covarianceM
 
 }
 
-void KalmanFilter::newCompassMeasurement( double compass,double covarianceCompass){
+void KalmanFilter::newCompassMeasurement( double compass) {
 
     MagMeasurement measurement;
 
 
    double compassCorrected = compass;
     measurement.angle = normalizeAngle(compassCorrected);
-    measurement.covarianceMag = covarianceCompass;
+    measurement.covarianceMag = mCovarianceMag;
 
     ImuMeasurement aImuMeasurement;
     PX4FlowMeasurement aPX4Measurement;
@@ -721,4 +744,150 @@ bool KalmanFilter::getPose(Vector3& pose) {
 
     stateToPose(pose, predictedState, predictedEstimationCovariance);
     return true;
+}
+
+bool KalmanFilter::loadConfigurationFiles(std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag) {
+
+  try {
+
+    //************************************
+    // PX4Flow
+    //************************************
+
+    boost::property_tree::ptree configTreePX4Flow;
+
+    ros::NodeHandle node_handlePX4Flow("~");
+    std::string configContentPX4Flow;
+    node_handlePX4Flow.getParam(filenamePX4Flow, configContentPX4Flow);
+    std::stringstream ssPX4Flow;
+    ssPX4Flow << configContentPX4Flow;
+    boost::property_tree::read_xml(ssPX4Flow, configTreePX4Flow);
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreePX4Flow.get_child("config")) {
+      if (v.first.compare("px4flow") == 0) {
+        int useFH = v.second.get<int>("<xmlattr>.useFixedSensorHeight", 0);
+        mUseFixedHeightPX4Flow = (useFH == 1);
+
+        mPX4flowHeight = v.second.get<double>("<xmlattr>.sensorHeight", 0);
+        mPX4FlowArmP1 = v.second.get<double>("<xmlattr>.armP0", 0);
+        mPX4FlowArmP2 = v.second.get<double>("<xmlattr>.armP1", 0);
+        mInitAnglePX4Flow = v.second.get<double>("<xmlattr>.sensorInitAngle", 0);
+
+        mCovarianceVelocityPX4Flow = v.second.get<double>("<xmlattr>.covarianceVelocity", 0);
+        mCovarianceGyroZPX4Flow = v.second.get<double>("<xmlattr>.covarianceGyroZ", 0);
+      }
+    }
+
+    //************************************
+    // UWB
+    //************************************
+
+    boost::property_tree::ptree configTreeTag;
+    ros::NodeHandle node_handleTag("~");
+    std::string configContentTag;
+    node_handleTag.getParam(filenameTag, configContentTag);
+    std::stringstream ssTag;
+    ssTag << configContentTag;
+    boost::property_tree::read_xml(ssTag, configTreeTag);
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeTag.get_child("config")) {
+      if (v.first.compare("uwb") == 0) {
+        int use = v.second.get<int>("<xmlattr>.useFixedHeight", 0);
+        mUseFixedHeight = (use == 1);
+        mUWBtagZ = v.second.get<double>("<xmlattr>.fixedHeight", 0);
+        mTagIdUWB = v.second.get<int>("<xmlattr>.tagId", 0);
+      }
+    }
+
+
+    //************************************
+    // IMU
+    //************************************
+
+    boost::property_tree::ptree configTreeImu;
+    ros::NodeHandle node_handleImu("~");
+    std::string configContentImu;
+    node_handleImu.getParam(filenameImu, configContentImu);
+    std::stringstream ssImu;
+    ssImu << configContentImu;
+    boost::property_tree::read_xml(ssImu, configTreeImu);
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeImu.get_child("config")) {
+      if (v.first.compare("imu") == 0) {
+        int useFCA = v.second.get<int>("<xmlattr>.useFixedCovarianceAcceleration", 0);
+        mUseImuFixedCovarianceAcceleration = (useFCA == 1);
+        mImuCovarianceAcceleration = v.second.get<double>("<xmlattr>.covarianceAcceleration", 0);
+        int useFCAVZ = v.second.get<int>("<xmlattr>.useFixedCovarianceAngularVelocityZ", 0);
+        mUseImuFixedCovarianceAngularVelocityZ = (useFCAVZ == 1);
+        mUmuCovarianceAngularVelocityZ = v.second.get<double>("<xmlattr>.covarianceAngularVelocityZ", 0);
+      }
+    }
+
+
+    //************************************
+    // Mag
+    //************************************
+
+    boost::property_tree::ptree configTreeMag;
+    ros::NodeHandle node_handleMag("~");
+    std::string configContentMag;
+    node_handleMag.getParam(filenameMag, configContentMag);
+    std::stringstream ssMag;
+    ssMag << configContentMag;
+    boost::property_tree::read_xml(ssMag, configTreeMag);
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreeMag.get_child("config")) {
+      if (v.first.compare("mag") == 0) {
+        mMagAngleOffset = v.second.get<double>("<xmlattr>.angleOffset", 0);
+        mCovarianceMag = v.second.get<double>("<xmlattr>.covarianceMag", 0);
+      }
+    }
+
+
+    //************************************
+    // Position
+    //************************************
+
+    ROS_INFO("POSGEN: Intentando cargar propiedad %s", filenamePos.c_str());
+    boost::property_tree::ptree configTreePos;
+    ros::NodeHandle node_handlePos("~");
+    std::string configContentPos;
+    node_handlePos.getParam(filenamePos, configContentPos);
+    std::stringstream ssPos;
+    ssPos << configContentPos;
+    boost::property_tree::read_xml(ssPos, configTreePos);
+
+
+    BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTreePos.get_child("config")) {
+      if (v.first.compare("algorithm") == 0) {
+
+/*        int type = v.second.get<int>("<xmlattr>.type", 0);
+        int variant = v.second.get<int>("<xmlattr>.variant", 0);
+        int numIgnoredRangings = v.second.get<int>("<xmlattr>.numIgnoredRangings", 0);
+        int bestMode = v.second.get<int>("<xmlattr>.bestMode", 0);
+        double minZ = v.second.get<double>("<xmlattr>.minZ", 0);
+        double maxZ = v.second.get<double>("<xmlattr>.maxZ", 0);
+
+        if (variant == 0) {
+          setVariantNormal();
+          ROS_INFO("POSGEN: Variant NORMAL");
+        } else if (variant == 1) {
+          setVariantIgnoreN(numIgnoredRangings);
+          ROS_INFO("POSGEN: Variant IGNORE N. Ignored: %d", numIgnoredRangings);
+        } else  if (variant == 2) {
+          setVariantOnlyBest(bestMode, minZ, maxZ);
+          ROS_INFO("POSGEN: Variant Best N:. BestMode: %d minZ: %f mazZ: %f", bestMode, minZ, maxZ);
+        }*/
+
+      }
+    }
+
+    return true;
+
+  } catch (boost::exception const &ex) {
+    return false;
+  }
+
+
+  return false;
 }

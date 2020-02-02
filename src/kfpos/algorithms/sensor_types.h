@@ -12,6 +12,10 @@ struct Vector3 {
 	arma::mat covarianceMatrix;
 };
 
+struct VectorDim3 {
+	double x, y, z;
+};
+
 
 struct Beacon {
 	int id;
@@ -46,6 +50,15 @@ typedef struct
 	double covarianceAccelerationXY[4];
 
 } ImuMeasurement;
+
+typedef struct
+{
+	double linearAccelerationX;
+	double linearAccelerationY;
+	double linearAccelerationZ;
+	double covarianceAccelerationXYZ[9];
+
+} ImuMeasurement3D;
 
 
 typedef struct

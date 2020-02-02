@@ -1,0 +1,28 @@
+<launch>
+    <arg name="targetDeviceId" default="aDevice" ></arg>
+    <arg name="rangingTopic" default="/gtec/toa/ranging" ></arg>
+    <arg name="anchorsTopic" default="/gtec/toa/anchors" ></arg>
+    <arg name="imuTopic" default="/gtec/gazebo/imu" ></arg>
+    <arg name="toaTagId" default="0" ></arg>
+    <arg name="useStartPosition" default="0" ></arg>
+    <arg name="initAngle" default="0.0" ></arg>
+    <arg name="initPositionX" default="0.0" ></arg>
+    <arg name="initPositionY" default="0.0" ></arg>
+    <arg name="initPositionZ" default="0.0" ></arg>
+    <node name="kfpos_toa_imu_$(arg targetDeviceId)" output="screen" pkg="gtec_roskfpos" type="kfpos" launch-prefix="">
+        <param name="rate" type="int" value="20" />
+        <param name="accelNoise" type="double" value="0.5"></param>
+        <param name="jolt" type="double" value="0.5"></param>
+        <param name="targetDeviceId" type="string" value="$(arg targetDeviceId)"></param>
+        <param name="rangingTopic" type="string" value="$(arg rangingTopic)"></param>
+        <param name="anchorsTopic" type="string" value="$(arg anchorsTopic)"></param>
+        <param name="imuTopic" type="string" value="$(arg imuTopic)"></param>
+        <param name="tagId" type="string" value="$(arg toaTagId)"></param>
+        <param name="algorithm" type="string" value="ALGORITHM_KF_TOA_IMU"></param>
+        <param name="useStartPosition" type="int" value="$(arg useStartPosition)" />
+        <param name="initAngle" type="double" value="$(arg initAngle)" />
+        <param name="initPositionX" type="double" value="$(arg initPositionX)" />
+        <param name="initPositionY" type="double" value="$(arg initPositionY)" />
+        <param name="initPositionZ" type="double" value="$(arg initPositionZ)" />
+    </node>
+</launch>

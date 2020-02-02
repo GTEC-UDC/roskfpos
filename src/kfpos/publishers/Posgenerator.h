@@ -27,7 +27,9 @@
 
 #include "../algorithms/MLLocation.h"
 #include "../algorithms/KalmanFilter.h"
-#include "../algorithms/KalmanFilterUWB.h"
+#include "../algorithms/KalmanFilterTOA.h"
+#include "../algorithms/KalmanFilterTOAIMU.h"
+#include "../algorithms/PositionEstimationAlgorithm.h"
 
 #include "ros/ros.h"
 #include "std_msgs/String.h"
@@ -61,7 +63,8 @@
 #define ALGORITHM_ML 2
 #define ALGORITHM_MAP 3
 #define ALGORITHM_KF 4
-#define ALGORITHM_KF_UWB 5
+#define ALGORITHM_KF_TOA 5
+#define ALGORITHM_KF_TOA_IMU 6
 
 #define RESULT_ML 4
 #define RESULT_MAP 5
@@ -132,42 +135,30 @@ class PosGenerator
 
 public:
     PosGenerator();
-    PosGenerator(int algorithm, bool useRawRange, int tagOffset0, int tagOffset1, int tagOffset2, int tagOffset3, bool useTwoTags);
-
 
     void start(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag,ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,double jolt);
     void start(std::string configFilenamePos,  std::string configFilenameTag, ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub,  double jolt);
-    void start(ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub, int tagId);
+    void start(ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub, int tagId, double jolt);
 
-    void setUseRawRange(bool useRawRange);
-    void setTagOffset(int tagOffset0, int tagOffset1, int tagOffset2, int tagOffset3);
-    void setObservationCovariance(std::vector<double> obsCov);
-    //void setAlgorithm(int algorithm);
-    void setAlgorithm(int algorithm, double accelerationNoise, bool ignoreWorstAnchorMode, double ignoreCostThreshold, bool mode3d);
-    void setTwoTagsMode(bool twoTagsMode);
-    void setTag0RelativePosition(double x, double y, double z);
-    void setTag1RelativePosition(double x, double y, double z);
 
-    void setVariantNormal();
-    void setVariantIgnoreN(int numIgnoredRangings);
-    void setVariantOnlyBest(int bestMode, double minZ, double maxZ);
+    void setPublishers(ros::Publisher aPub, ros::Publisher aPathPub, ros::Publisher aOdomPub);
+    void setDynamicParameters(double accelerationNoise, double jolt);
+    void setExternalFilesParameters(std::string configFilenamePos, std::string configFilenamePX4Flow, std::string configFilenameTag, std::string configFilenameImu, std::string configFilenameMag);
+    void setStartParameters(bool useStartPosition, double startPositionX, double startPositionY,double startPositionZ,double  startAngle);
+    void setHeuristicIgnore(bool ignoreWorstAnchorMode, double ignoreCostThreshold);
+    void setDeviceIdentifiers(int toaTagId);
 
-    void setImuPublisher(ros::Publisher anImuPub, bool enabled);
-    void setCompassPublisher(ros::Publisher aCompassPub, bool enabled);
-    void setAnchorsPublisher(ros::Publisher anAnchorsPub, bool enabled);
+
+    void setAlgorithm(int algorithm);
+
     void publishFixedRateReport();
-
-
-    bool init( std::string filenamePos, std::string filenamePX4Flow, std::string filenameTag, std::string filenameImu, std::string filenameMag);
-    bool init(std::string filenamePos, std::string filenameTag);
     void reset();
 
-    void newUWBMeasurement(const gtec_msgs::Ranging::ConstPtr& uwbRanging);
+    void newTOAMeasurement(const gtec_msgs::Ranging::ConstPtr& uwbRanging);
     void newPX4FlowMeasurement(const mavros_msgs::OpticalFlowRad::ConstPtr& px4FlowMeasurement);
     void newIMUMeasurement(const sensor_msgs::Imu::ConstPtr& imuMeasurement);
     void newMAGMeasurement(const sensor_msgs::MagneticField::ConstPtr& magMeasurement);
     void newCompassMeasurement(const std_msgs::Float64 compasMeasurement);
-
     void newAnchorsMarkerArray(const visualization_msgs::MarkerArray::ConstPtr& anchorsMarkerArray);
 
 
@@ -187,7 +178,17 @@ private:
     bool publishImu;
     bool publishAnchors;
     bool publishCompass;
+
+    double mInitAngle;
+    double mAccelerationNoise;
     double mJolt;
+
+    bool mIgnoreWorstAnchorMode;
+    double mIgnoreCostThreshold;
+
+    int mTOATagId;
+
+    std::string mFilenamePos, mFilenamePX4Flow, mFilenameTag, mFilenameImu, mFilenameMag;
 
     int maxPathSize = 1000;
     int currentPathIndex = 0;
@@ -199,46 +200,9 @@ private:
     std::vector <tag_reports_t> _tagList;
     std::unordered_map<int, int> _anchorIndexById;
 
-    bool useRawRange;
-    bool useTwoTags;
-    bool useInitPosition;
-    Vector3 initPosition;
+    bool mUseInitPosition;
+    Vector3 mInitPosition;
 
-    bool useFixedHeightUWB;
-    double fixedHeightUWB;
-    int tagIdUWB;
-
-
-    bool usePX4Flow;
-    bool useFixedHeightPX4Flow;
-    double armP0PX4Flow;
-    double armP1PX4Flow;
-    double fixedHeightPX4Flow;
-    double initAnglePX4Flow;
-    double covarianceVelocityPX4Flow;
-    double covarianceGyroZPX4Flow;
-
-
-    bool useImu;
-    double imuCovarianceAcceleration;
-    bool useImuFixedCovarianceAngularVelocityZ;
-    bool useImuFixedCovarianceAcceleration;
-    double imuCovarianceAngularVelocityZ;
-
-    bool useMag;
-    double magAngleOffset;
-    double covarianceMag;
-
-    int algorithm;
-    int tagOffset0;
-    int tagOffset1;
-    int tagOffset2;
-    int tagOffset3;
-    std::vector<bool> twoTagsReady;
-    std::vector<double> observationCovariance;
-
-    int twoTagsLastRanges[2][4];
-    double twoTagsLastErrorEstimation[2][4];
     void initialiseTagList(int id);
     int calculateTagLocationWithRangings(Vector3 *report, int count, int *ranges, double *errorEstimation, double timeLag);
     void processRanging(int anchorId, int tagId, double range, double rawrange, double errorEstimation, int seq, bool withErrorEstimation);
@@ -247,22 +211,11 @@ private:
 
     void sendRangingMeasurementIfAvailable(tag_reports_t tagReport);
     Vector3 previousPos;
-    std::unique_ptr<KalmanFilter> kalmanFilter;
-    std::unique_ptr<KalmanFilterUWB> kalmanFilterUWB;
+
+    std::unique_ptr<PositionEstimationAlgorithm> mPositionAlgorithm;
     std::vector<Beacon> beacons;
-    Vector3 tag0RelativePosition;
-    Vector3 tag1RelativePosition;
 
     std::chrono::steady_clock::time_point mLastRangingPositionTimestamp;
-
-    //ML Variants
-    int variant;
-
-    int numIgnoredRangings;
-
-    int bestMode;
-    double minZ;
-    double maxZ;
 
     int lastRangingSeq;
     std::chrono::steady_clock::time_point timestampLastRanging;

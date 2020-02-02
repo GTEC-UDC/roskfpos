@@ -1,5 +1,6 @@
 
 #include "Posgenerator.h"
+#include "PositionEstimationAlgorithm.h"
 #include <mavros_msgs/OpticalFlowRad.h>
 #include <nav_msgs/Path.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -21,42 +22,76 @@ int main(int argc, char *argv[])
 
     int currentAlgorithm;
     int rate;
-    double jolt, accelNoise, magAngleOffset;
-    std::string targetDeviceId, tagId, algorithm, rangingTopic, anchorsTopic;
+    double jolt, accelNoise;
+    std::string targetDeviceId, tagId, algorithm, rangingTopic, anchorsTopic, imuTopic, magTopic, px4Topic;
+    int usePX4Flow = 0, useTOA = 0, useImu = 0, useMag = 0;
+
+    double initAngle = 0;
+    double initPositionX = 0, initPositionY = 0, initPositionZ = 0;
+    int useStartPosition;
+
+    bool useHeuristicIgnoreWorst = false;
+    double heuristicIgnoreThreshold = 0;
 
     std::string nodeName = ros::this_node::getName();
 
     n.getParam("algorithm", algorithm);
 
-    if ((algorithm.compare("ALGORITHM_KF_UWB")) == 0){
-        currentAlgorithm = ALGORITHM_KF_UWB;
-    } else {
+
+    if ((algorithm.compare("ALGORITHM_KF_TOA")) == 0){
+        currentAlgorithm = ALGORITHM_KF_TOA;
+    } else if ((algorithm.compare("ALGORITHM_KF_TOA_IMU")) == 0){
+        currentAlgorithm = ALGORITHM_KF_TOA_IMU;
+    }else {
         currentAlgorithm = ALGORITHM_KF;
     }
 
     n.getParam("rate", rate);
     n.getParam("accelNoise", accelNoise);
-    n.getParam("magAngleOffset", magAngleOffset);
+    n.getParam("jolt", jolt);
     n.getParam("targetDeviceId", targetDeviceId);
+    n.getParam("useStartPosition", useStartPosition);
+    n.getParam("initAngle", initAngle);
+    n.getParam("initPositionX", initPositionX);
+    n.getParam("initPositionY", initPositionY);
+    n.getParam("initPositionZ", initPositionZ);
+    n.getParam("toaTagId", tagId);
 
     if (currentAlgorithm == ALGORITHM_KF){
-        n.getParam("jolt", jolt);
-        
-    
-    } else {
-        n.getParam("tagId", tagId);
+        ROS_INFO("Algorithm: ALGORITHM_KF");
         n.getParam("rangingTopic", rangingTopic);
         n.getParam("anchorsTopic", anchorsTopic);
+        n.getParam("imuTopic", imuTopic);
+        n.getParam("magTopic", anchorsTopic);
+        n.getParam("px4Topic", px4Topic);
+        n.getParam("usePX4Flow", usePX4Flow);
+        n.getParam("useTOA", useTOA);
+        n.getParam("useIMU", useImu);
+        n.getParam("useMAG", useMag);
+        
+    } else if (currentAlgorithm == ALGORITHM_KF_TOA){
+        ROS_INFO("Algorithm: ALGORITHM_KF_TOA");
+        n.getParam("rangingTopic", rangingTopic);
+        n.getParam("anchorsTopic", anchorsTopic);
+        n.getParam("useHeuristicIgnoreWorst", useHeuristicIgnoreWorst);
+        n.getParam("heuristicIgnoreThreshold", heuristicIgnoreThreshold);
+        useTOA = 1;
+    } else if (currentAlgorithm == ALGORITHM_KF_TOA_IMU){
+        ROS_INFO("Algorithm: ALGORITHM_KF_TOA_IMU");
+        n.getParam("rangingTopic", rangingTopic);
+        n.getParam("anchorsTopic", anchorsTopic);
+        n.getParam("imuTopic", imuTopic);
+        useTOA = 1;
+        useImu = 1;
     }
-    
 
+    //Publishers creation
+    std::ostringstream stringStream;
+    stringStream << "/gtec/" << nodeName.c_str() << "/" << targetDeviceId.c_str();
+    std::string topicPos = stringStream.str();
 
-     std::ostringstream stringStream;
-     stringStream << "/gtec/" << nodeName.c_str() << "/" << targetDeviceId.c_str();
-     std::string topicPos = stringStream.str();
-
-     stringStream.str("");
-     stringStream.clear();
+    stringStream.str("");
+    stringStream.clear();
     stringStream << "/gtec/" << nodeName.c_str() << "/path" << "/" << targetDeviceId.c_str();
     std::string topicPathPos = stringStream.str();
 
@@ -69,148 +104,54 @@ int main(int argc, char *argv[])
     ros::Publisher gtec_uwb_pos_px4flow_pub_path = n.advertise<nav_msgs::Path>(topicPathPos, 200);
     ros::Publisher gtec_uwb_pos_odom = n.advertise<nav_msgs::Odometry>(topicOdomPos, 200);
 
+    //Position Generator configuration
+
     PosGenerator aPosGenerator;
-if (currentAlgorithm==ALGORITHM_KF){
-        ROS_INFO("Algorithm: ALGORITHM_KF");
-        aPosGenerator.start("configPos", "configPX4Flow", "configUWB", "configIMU", "configMAG", gtec_uwb_pos_px4flow_pub, gtec_uwb_pos_px4flow_pub_path, gtec_uwb_pos_odom, jolt);
-        aPosGenerator.setAlgorithm(ALGORITHM_KF, accelNoise, false, magAngleOffset, false);
-    } else {
-        ROS_INFO("Algorithm: ALGORITHM_KF_UWB");
-        int tagIdInt;   
-        std::stringstream ss;
-        ss << std::hex << tagId.c_str();
-        ss >> tagIdInt;
-        aPosGenerator.start(gtec_uwb_pos_px4flow_pub, gtec_uwb_pos_px4flow_pub_path, gtec_uwb_pos_odom, tagIdInt);
-        aPosGenerator.setAlgorithm(ALGORITHM_KF_UWB, accelNoise, false, magAngleOffset, false);
+    aPosGenerator.setExternalFilesParameters("configPos", "configPX4Flow", "configUWB", "configIMU", "configMAG");
+    aPosGenerator.setPublishers(gtec_uwb_pos_px4flow_pub, gtec_uwb_pos_px4flow_pub_path, gtec_uwb_pos_odom);
+    aPosGenerator.setDynamicParameters(accelNoise, jolt);
+    aPosGenerator.setStartParameters(useStartPosition==1, initPositionX, initPositionY, initPositionZ, initAngle);
+    aPosGenerator.setHeuristicIgnore(useHeuristicIgnoreWorst, heuristicIgnoreThreshold);
+
+
+    int tagIdInt;   
+    std::stringstream ss;
+    ss << std::hex << tagId.c_str();
+    ss >> tagIdInt;
+    aPosGenerator.setDeviceIdentifiers(tagIdInt);
+
+    aPosGenerator.setAlgorithm(currentAlgorithm);
+
+
+
+    if (useTOA==1)
+    {
+        ROS_INFO("Position Generator: TOA ON. Ranging Topic: %s", rangingTopic.c_str());
+        ROS_INFO("Position Generator: Anchors Topic: %s", anchorsTopic.c_str());
+        sub0 = n.subscribe<gtec_msgs::Ranging>(rangingTopic, 20, &PosGenerator::newTOAMeasurement, &aPosGenerator);
+        sub1 = n.subscribe<visualization_msgs::MarkerArray>(anchorsTopic, 20, &PosGenerator::newAnchorsMarkerArray, &aPosGenerator);
+    }
+
+    if (usePX4Flow==1)
+    {
+        ROS_INFO("Position Generator: PX4Flow ON. Topic: %s", px4Topic.c_str());
+        sub2 = n.subscribe<mavros_msgs::OpticalFlowRad>(px4Topic, 20, &PosGenerator::newPX4FlowMeasurement, &aPosGenerator);
+    }
+
+    if (useImu==1)
+    {
+        ROS_INFO("Position Generator: IMU ON. Topic: %s", imuTopic.c_str());
+        sub3 = n.subscribe<sensor_msgs::Imu>(imuTopic, 20, &PosGenerator::newIMUMeasurement, &aPosGenerator);
+    }
+
+    if (useMag==1)
+    {
+        ROS_INFO("Position Generator: MAG ON. Topic: %s", magTopic.c_str());
+        sub4 = n.subscribe<std_msgs::Float64>(magTopic, 20, &PosGenerator::newCompassMeasurement, &aPosGenerator);
     }
 
 
-
-
-    if (currentAlgorithm==ALGORITHM_KF){
-
-
-        bool usePX4Flow = false, useUwb = false, useImu = false, useMag = false;
-        std::string px4flowTopic, rangingTopicConfig, imuTopic, magTopic, anchorsTopicConfig;
-
-        try
-        {
-
-            boost::property_tree::ptree configTree;
-            std::string configContent;
-            n.getParam("configSubscriptions", configContent);
-            std::stringstream ssConfig;
-            ssConfig << configContent;
-            boost::property_tree::read_xml(ssConfig, configTree);
-
-            BOOST_FOREACH(const boost::property_tree::ptree::value_type & v, configTree.get_child("config"))
-            {
-                if (v.first.compare("px4flow") == 0)
-                {
-                    usePX4Flow = (v.second.get<int>("<xmlattr>.use", 0)) == 1;
-                    px4flowTopic = v.second.get<std::string>("<xmlattr>.topic", "");
-                }
-                else if (v.first.compare("uwb") == 0)
-                {
-                    useUwb = (v.second.get<int>("<xmlattr>.use", 0)) == 1;
-                    rangingTopicConfig = v.second.get<std::string>("<xmlattr>.topic", "");
-                    anchorsTopicConfig = v.second.get<std::string>("<xmlattr>.anchors_topic", "");
-                }
-                else if (v.first.compare("imu") == 0)
-                {
-                    useImu = (v.second.get<int>("<xmlattr>.use", 0)) == 1;
-                    imuTopic = v.second.get<std::string>("<xmlattr>.topic", "");
-                }
-                else if (v.first.compare("mag") == 0)
-                {
-                    useMag = (v.second.get<int>("<xmlattr>.use", 0)) == 1;
-                    bool withInterference = (v.second.get<int>("<xmlattr>.interference", 0)) == 1;
-                    if (withInterference)
-                    {
-                        magTopic = v.second.get<std::string>("<xmlattr>.topicInterference", "");
-                    }
-                    else
-                    {
-                        magTopic = v.second.get<std::string>("<xmlattr>.topic", "");
-                    }
-                }
-            }
-
-        }
-        catch (boost::exception const &ex)
-        {
-            ROS_INFO("Read error in config_subscriptions.xml");
-        }
-
-        if (n.hasParam("use_uwb"))
-        {
-            int use_uwb_param;
-            n.getParam("use_uwb", use_uwb_param);
-            useUwb = (use_uwb_param == 1);
-        }
-
-        if (n.hasParam("use_imu"))
-        {
-            int use_imu_param;
-            n.getParam("use_imu", use_imu_param);
-            useImu = (use_imu_param == 1);
-        }
-
-        if (n.hasParam("use_mag"))
-        {
-            int use_mag_param;
-            n.getParam("use_mag", use_mag_param);
-            useMag = (use_mag_param == 1);
-        }
-
-        if (n.hasParam("use_px4"))
-        {
-            int use_px4_param;
-            n.getParam("use_px4", use_px4_param);
-            usePX4Flow = (use_px4_param == 1);
-        }
-
-        
-
-        if (useUwb)
-        {
-            ROS_INFO("KFPOS: UWB ON. Ranging Topic: %s", rangingTopicConfig.c_str());
-            ROS_INFO("KFPOS: Anchors Topic: %s", anchorsTopicConfig.c_str());
-            sub0 = n.subscribe<gtec_msgs::Ranging>(rangingTopicConfig, 20, &PosGenerator::newUWBMeasurement, &aPosGenerator);
-            sub4 = n.subscribe<visualization_msgs::MarkerArray>(anchorsTopicConfig, 20, &PosGenerator::newAnchorsMarkerArray, &aPosGenerator);
-        }
-
-        if (usePX4Flow)
-        {
-            ROS_INFO("KFPOS: PX4Flow ON. Topic: %s", px4flowTopic.c_str());
-            sub1 = n.subscribe<mavros_msgs::OpticalFlowRad>(px4flowTopic, 20, &PosGenerator::newPX4FlowMeasurement, &aPosGenerator);
-        }
-
-        if (useImu)
-        {
-            ROS_INFO("KFPOS: IMU ON. Topic: %s", imuTopic.c_str());
-            sub2 = n.subscribe<sensor_msgs::Imu>(imuTopic, 20, &PosGenerator::newIMUMeasurement, &aPosGenerator);
-        }
-
-        if (useMag)
-        {
-            ROS_INFO("KFPOS: MAG ON. Topic: %s", magTopic.c_str());
-            sub3 = n.subscribe<std_msgs::Float64>(magTopic, 20, &PosGenerator::newCompassMeasurement, &aPosGenerator);
-        }
-
-
-    } else {
-
-
-        ROS_INFO("KFPOS: UWB ON. Ranging Topic: %s", rangingTopic.c_str());
-        ROS_INFO("KFPOS: Anchors Topic: %s", anchorsTopic.c_str());
-        sub0 = n.subscribe<gtec_msgs::Ranging>(rangingTopic, 10, &PosGenerator::newUWBMeasurement, &aPosGenerator);
-        sub4 = n.subscribe<visualization_msgs::MarkerArray>(anchorsTopic, 10, &PosGenerator::newAnchorsMarkerArray, &aPosGenerator);
-        
-    }
-
-
-    ROS_INFO("Rate: %d Hz", rate);
+    ROS_INFO("Position Generator. Rate: %d Hz", rate);
     ros::Rate r(rate);
     while (ros::ok())
     {

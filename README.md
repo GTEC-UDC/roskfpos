@@ -4,7 +4,7 @@
 
 If you use this code for your scientific activities, a citation is appreciated.
 
-# README (DEPRECATED, NEEDS UPDATE)
+# README (Readme deprecated, need update)
 
 This node implements a positioning algorithm based on EKF to generate positions based on data coming from one or various sensors:
 

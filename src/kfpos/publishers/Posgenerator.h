@@ -147,6 +147,7 @@ public:
     void setStartParameters(bool useStartPosition, double startPositionX, double startPositionY,double startPositionZ,double  startAngle);
     void setHeuristicIgnore(bool ignoreWorstAnchorMode, double ignoreCostThreshold);
     void setDeviceIdentifiers(int toaTagId);
+    void setHeuristicML(bool use2d, int variant, int numRangingsToIgnore);
 
 
     void setAlgorithm(int algorithm);
@@ -183,8 +184,8 @@ private:
     double mAccelerationNoise;
     double mJolt;
 
-    bool mIgnoreWorstAnchorMode;
-    double mIgnoreCostThreshold;
+    bool mIgnoreWorstAnchorMode = false;
+    double mIgnoreCostThreshold = 0.0;
 
     int mTOATagId;
 
@@ -202,6 +203,13 @@ private:
 
     bool mUseInitPosition;
     Vector3 mInitPosition;
+
+
+    bool mUse2d;
+    int mVariant;
+    int mNumRangingsToIgnore;
+
+
 
     void initialiseTagList(int id);
     int calculateTagLocationWithRangings(Vector3 *report, int count, int *ranges, double *errorEstimation, double timeLag);

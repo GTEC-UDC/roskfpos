@@ -1,7 +1,5 @@
 #include "Posgenerator.h"
 
-
-
 PosGenerator::PosGenerator() {
   this->mLastRangingPositionTimestamp =  std::chrono::steady_clock::time_point::min();
   this->timestampLastRanging = std::chrono::steady_clock::time_point::min();
@@ -75,6 +73,13 @@ void PosGenerator::setHeuristicIgnore(bool ignoreWorstAnchorMode, double ignoreC
 
 void PosGenerator::setDeviceIdentifiers(int toaTagId){
   mTOATagId = toaTagId;
+}
+
+
+void PosGenerator::setHeuristicML(bool use2d, int variant, int numRangingsToIgnore){
+  mUse2d = use2d;
+  mVariant = variant;
+  mNumRangingsToIgnore = numRangingsToIgnore;
 }
 
 
@@ -515,11 +520,17 @@ void PosGenerator::setAlgorithm(int algorithm) {
       } else {
         mPositionAlgorithm.reset(new KalmanFilter( mAccelerationNoise, mInitAngle, mJolt, mFilenamePos, mFilenamePX4Flow, mFilenameTag, mFilenameImu, mFilenameMag, mInitPosition));
       }
-  }else if (algorithm==ALGORITHM_KF_TOA_IMU){
+  } else if (algorithm==ALGORITHM_KF_TOA_IMU){
       if (!mUseInitPosition) {
         mPositionAlgorithm.reset(new KalmanFilterTOAIMU( mAccelerationNoise, mJolt));
       } else {
         mPositionAlgorithm.reset(new KalmanFilterTOAIMU( mAccelerationNoise, mJolt, mInitPosition));
+      }
+  } else if (algorithm==ALGORITHM_ML){
+      if (!mUseInitPosition) {
+        mPositionAlgorithm.reset(new MLLocation(mUse2d, mVariant, mNumRangingsToIgnore, {1,1,4}));
+      } else {
+        mPositionAlgorithm.reset(new MLLocation(mUse2d, mVariant, mNumRangingsToIgnore, mInitPosition));
       }
   }
 
@@ -528,7 +539,7 @@ void PosGenerator::setAlgorithm(int algorithm) {
 
 
 void PosGenerator::publishFixedRateReport() {
-  Vector3 pose;
+  Vector3 pose = {NAN, NAN, NAN};
   bool canSendReport = mPositionAlgorithm->getPose(pose);
 
   if (canSendReport){

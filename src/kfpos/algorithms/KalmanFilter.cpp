@@ -250,10 +250,10 @@ void KalmanFilter::estimatePositionKF(bool hasRangingMeasurements, const std::ve
             if (hasRangingMeasurements) {
                 ROS_INFO("KalmanFilter Ranging mode"); 
                 if (mUseFixedHeight) {
-                    mPosition = mlLocation->estimatePosition2D(rangingMeasurements, { 0.0, 0.0, mUWBtagZ });   
+                    mPosition = mlLocation->estimatePosition2D(rangingMeasurements, { 1.0, 1.0, mUWBtagZ });   
                 } else {
                     
-                    mPosition = mlLocation->estimatePosition(rangingMeasurements, { 0.0, 0.0, 0.0 });
+                    mPosition = mlLocation->estimatePosition(rangingMeasurements, { 1.0, 1.0, 4.0 });
                     mUWBtagZ = mPosition.z; 
                 }
                 

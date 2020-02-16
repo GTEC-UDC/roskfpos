@@ -123,7 +123,7 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
             ROS_INFO("KalmanFilter initPosition is NAN"); 
             if (hasRangingMeasurements) {
                 ROS_INFO("KalmanFilter Ranging mode"); 
-                mPosition = mlLocation->estimatePosition(rangingMeasurements, { 0.0, 0.0, 0.0 });
+                mPosition = mlLocation->estimatePosition(rangingMeasurements, { 1.0, 1.0, 4.0 });
                 ROS_INFO("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
 
                 mPosition.rotX = 0.0;

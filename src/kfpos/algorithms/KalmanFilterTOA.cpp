@@ -90,7 +90,7 @@ void KalmanFilterTOA::estimatePositionKF(const std::vector<RangingMeasurement>& 
     if (!mUseFixedInitialPosition) {
         if (std::isnan(mPosition.x) || std::isnan(mPosition.y) || std::isnan(mPosition.z)) {
 
-            mPosition = mlLocation->estimatePosition(rangingMeasurements, { 0.0, 0.0, 0.0 });
+            mPosition = mlLocation->estimatePosition(rangingMeasurements, { 1.0, 1.0, 4.0 });
             ROS_DEBUG("KalmanFilterTOA new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z);
 
             estimationCovariance(0, 0) = mPosition.covarianceMatrix(0, 0);
@@ -126,6 +126,10 @@ void KalmanFilterTOA::estimatePositionKF(const std::vector<RangingMeasurement>& 
     arma::mat lastValidEstimationCovariance(estimationCovariance);
 
     StateWithCovariance newState;
+
+
+    try {
+
     if (allRangingMeasurements.size()>4 && _ignoreWorstAnchorMode){
         //We can ignore ONE anchor if its behaviour is different from the rest
         //double costThreshold = 0.5;
@@ -143,6 +147,10 @@ void KalmanFilterTOA::estimatePositionKF(const std::vector<RangingMeasurement>& 
     estimationCovariance = newState.estimationCovariance;
     //Actualizamos la pose
     stateToPose(mPosition, newState.state, newState.estimationCovariance);
+
+} catch (const std::runtime_error& e){
+
+}
 
     //return mPosition;
 }
@@ -258,8 +266,14 @@ StateWithIgnoredAnchor KalmanFilterTOA::kalmanStep3DIgnoreAnchor(const arma::vec
 
     ROS_DEBUG("KalmanFilterTOA ML Position");
     Vector3 mlTempPosition = mlLocation->estimatePosition(rangingMeasurements, { newState(0), newState(1), newState(2) });
+
+    if (std::isnan(mlTempPosition.x) || std::isnan(mlTempPosition.y) || std::isnan(mlTempPosition.z)){
+        mlTempPosition = { newState(0), newState(1), newState(2) };
+    }
     double mlRangingError = mlLocation->estimationError(rangingMeasurements, mlTempPosition);
-    ROS_DEBUG("KalmanFilterTOA mlRanginError: %f", mlRangingError);
+    
+
+    ROS_DEBUG("KalmanFilterTOA mlTempPosition: (%f, %f, %f),mlRanginError: %f", mlRangingError,mlTempPosition.x, mlTempPosition.y, mlTempPosition.z);
 
     for (int i = 0; i < rangingMeasurements.size(); ++i)
     {
@@ -270,6 +284,8 @@ StateWithIgnoredAnchor KalmanFilterTOA::kalmanStep3DIgnoreAnchor(const arma::vec
 
     arma::mat jacobian(countValid, 6);
     arma::mat kalmanGain;
+
+
     arma::mat invObsCovariance = inv(observationCovariance);
     arma::mat invEstCovariance = pinv(estimationCovariance);
     // arma::vec predictionDiff = predictedState - state;

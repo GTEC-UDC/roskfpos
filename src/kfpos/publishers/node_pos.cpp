@@ -15,75 +15,105 @@
 int main(int argc, char *argv[])
 {
 
-    ros::Subscriber sub0, sub1, sub2, sub3, sub4;
-
     ros::init(argc, argv, "kfpos");
     ros::NodeHandle n("~");
 
-    int currentAlgorithm;
+    ros::Subscriber sub0, sub1, sub2, sub3, sub4;
+    PosGenerator aPosGenerator;
+    int currentAlgorithm = ALGORITHM_KF;
     int rate;
-    double jolt, accelNoise;
     std::string targetDeviceId, tagId, algorithm, rangingTopic, anchorsTopic, imuTopic, magTopic, px4Topic;
-    int usePX4Flow = 0, useTOA = 0, useImu = 0, useMag = 0;
+    int usePX4Flow = 0, useTOA = 1, useImu = 0, useMag = 0;
 
+    //Dynamic properties
+    double jolt, accelNoise;
+
+    //Init position
     double initAngle = 0;
     double initPositionX = 0, initPositionY = 0, initPositionZ = 0;
     int useStartPosition;
 
+    //KF ignore
     bool useHeuristicIgnoreWorst = false;
     double heuristicIgnoreThreshold = 0;
+
+    //ML
+    bool use2d = false;
+    int variant = 0;
+    int numRangingsToIgnore = 0;
+
 
     std::string nodeName = ros::this_node::getName();
 
     n.getParam("algorithm", algorithm);
 
-
     if ((algorithm.compare("ALGORITHM_KF_TOA")) == 0){
         currentAlgorithm = ALGORITHM_KF_TOA;
     } else if ((algorithm.compare("ALGORITHM_KF_TOA_IMU")) == 0){
         currentAlgorithm = ALGORITHM_KF_TOA_IMU;
-    }else {
+    } else if ((algorithm.compare("ALGORITHM_KF")) == 0) {
         currentAlgorithm = ALGORITHM_KF;
+    } else if ((algorithm.compare("ALGORITHM_ML")) == 0) {
+        currentAlgorithm = ALGORITHM_ML;
     }
 
+    //Common parameters
     n.getParam("rate", rate);
-    n.getParam("accelNoise", accelNoise);
-    n.getParam("jolt", jolt);
     n.getParam("targetDeviceId", targetDeviceId);
-    n.getParam("useStartPosition", useStartPosition);
-    n.getParam("initAngle", initAngle);
-    n.getParam("initPositionX", initPositionX);
-    n.getParam("initPositionY", initPositionY);
-    n.getParam("initPositionZ", initPositionZ);
     n.getParam("toaTagId", tagId);
+    n.getParam("useStartPosition", useStartPosition);
+    n.getParam("rangingTopic", rangingTopic);
+    n.getParam("anchorsTopic", anchorsTopic);
 
-    if (currentAlgorithm == ALGORITHM_KF){
-        ROS_INFO("Algorithm: ALGORITHM_KF");
-        n.getParam("rangingTopic", rangingTopic);
-        n.getParam("anchorsTopic", anchorsTopic);
-        n.getParam("imuTopic", imuTopic);
-        n.getParam("magTopic", anchorsTopic);
-        n.getParam("px4Topic", px4Topic);
-        n.getParam("usePX4Flow", usePX4Flow);
-        n.getParam("useTOA", useTOA);
-        n.getParam("useIMU", useImu);
-        n.getParam("useMAG", useMag);
-        
-    } else if (currentAlgorithm == ALGORITHM_KF_TOA){
-        ROS_INFO("Algorithm: ALGORITHM_KF_TOA");
-        n.getParam("rangingTopic", rangingTopic);
-        n.getParam("anchorsTopic", anchorsTopic);
-        n.getParam("useHeuristicIgnoreWorst", useHeuristicIgnoreWorst);
-        n.getParam("heuristicIgnoreThreshold", heuristicIgnoreThreshold);
-        useTOA = 1;
-    } else if (currentAlgorithm == ALGORITHM_KF_TOA_IMU){
-        ROS_INFO("Algorithm: ALGORITHM_KF_TOA_IMU");
-        n.getParam("rangingTopic", rangingTopic);
-        n.getParam("anchorsTopic", anchorsTopic);
-        n.getParam("imuTopic", imuTopic);
-        useTOA = 1;
-        useImu = 1;
+    if (useStartPosition==1){
+        n.getParam("initPositionX", initPositionX);
+        n.getParam("initPositionY", initPositionY);
+        n.getParam("initPositionZ", initPositionZ);
+        n.getParam("initAngle", initAngle); 
     }
+
+    if (currentAlgorithm == ALGORITHM_ML){
+        //ML
+        ROS_INFO("Algorithm: ALGORITHM_ML");
+
+        n.getParam("use2d", use2d);
+        n.getParam("variant", variant);
+        n.getParam("numRangingsToIgnore", numRangingsToIgnore);
+
+        aPosGenerator.setStartParameters(useStartPosition==1, initPositionX, initPositionY, initPositionZ, initAngle);
+        aPosGenerator.setHeuristicML(use2d, variant, numRangingsToIgnore);
+    } else {
+        //KF variants
+        n.getParam("accelNoise", accelNoise);
+        n.getParam("jolt", jolt);
+        
+        if (currentAlgorithm == ALGORITHM_KF){
+            ROS_INFO("Algorithm: ALGORITHM_KF");
+            n.getParam("imuTopic", imuTopic);
+            n.getParam("magTopic", anchorsTopic);
+            n.getParam("px4Topic", px4Topic);
+            n.getParam("usePX4Flow", usePX4Flow);
+            n.getParam("useTOA", useTOA);
+            n.getParam("useIMU", useImu);
+            n.getParam("useMAG", useMag);
+        } else if (currentAlgorithm == ALGORITHM_KF_TOA){
+            ROS_INFO("Algorithm: ALGORITHM_KF_TOA");
+            n.getParam("useHeuristicIgnoreWorst", useHeuristicIgnoreWorst);
+            n.getParam("heuristicIgnoreThreshold", heuristicIgnoreThreshold);
+            useTOA = 1;
+        } else if (currentAlgorithm == ALGORITHM_KF_TOA_IMU){
+            ROS_INFO("Algorithm: ALGORITHM_KF_TOA_IMU");
+            n.getParam("imuTopic", imuTopic);
+            useTOA = 1;
+            useImu = 1;
+        }
+
+        aPosGenerator.setExternalFilesParameters("configPos", "configPX4Flow", "configUWB", "configIMU", "configMAG");
+        aPosGenerator.setDynamicParameters(accelNoise, jolt);
+        aPosGenerator.setStartParameters(useStartPosition==1, initPositionX, initPositionY, initPositionZ, initAngle);
+        aPosGenerator.setHeuristicIgnore(useHeuristicIgnoreWorst, heuristicIgnoreThreshold);
+    }
+
 
     //Publishers creation
     std::ostringstream stringStream;
@@ -100,29 +130,19 @@ int main(int argc, char *argv[])
     stringStream << "/gtec/" << nodeName.c_str() << "/odom" << "/" << targetDeviceId.c_str();
     std::string topicOdomPos = stringStream.str();
 
-    ros::Publisher gtec_uwb_pos_px4flow_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>(topicPos, 200);
-    ros::Publisher gtec_uwb_pos_px4flow_pub_path = n.advertise<nav_msgs::Path>(topicPathPos, 200);
-    ros::Publisher gtec_uwb_pos_odom = n.advertise<nav_msgs::Odometry>(topicOdomPos, 200);
+    ros::Publisher gtec_pose_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>(topicPos, 200);
+    ros::Publisher gtec_pose_parth_pub = n.advertise<nav_msgs::Path>(topicPathPos, 200);
+    ros::Publisher gtec_odom_pub = n.advertise<nav_msgs::Odometry>(topicOdomPos, 200);
 
-    //Position Generator configuration
-
-    PosGenerator aPosGenerator;
-    aPosGenerator.setExternalFilesParameters("configPos", "configPX4Flow", "configUWB", "configIMU", "configMAG");
-    aPosGenerator.setPublishers(gtec_uwb_pos_px4flow_pub, gtec_uwb_pos_px4flow_pub_path, gtec_uwb_pos_odom);
-    aPosGenerator.setDynamicParameters(accelNoise, jolt);
-    aPosGenerator.setStartParameters(useStartPosition==1, initPositionX, initPositionY, initPositionZ, initAngle);
-    aPosGenerator.setHeuristicIgnore(useHeuristicIgnoreWorst, heuristicIgnoreThreshold);
-
-
+    aPosGenerator.setPublishers(gtec_pose_pub, gtec_pose_parth_pub, gtec_odom_pub);
+    
     int tagIdInt;   
     std::stringstream ss;
     ss << std::hex << tagId.c_str();
     ss >> tagIdInt;
+
     aPosGenerator.setDeviceIdentifiers(tagIdInt);
-
     aPosGenerator.setAlgorithm(currentAlgorithm);
-
-
 
     if (useTOA==1)
     {

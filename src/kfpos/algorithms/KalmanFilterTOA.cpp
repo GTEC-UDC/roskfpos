@@ -22,11 +22,11 @@ KalmanFilterTOA::KalmanFilterTOA(double accelerationNoise, bool ignoreWorstAncho
     mAccelerationNoise(accelerationNoise),
     mUseFixedInitialPosition(true),
     _ignoreWorstAnchorMode(ignoreWorstAnchorMode),
-    _ignoreCostThreshold(ignoreCostThreshold)
+    _ignoreCostThreshold(ignoreCostThreshold),
+    mPosition(initialPosition)
 {
     MLLocation *mlLocation = new MLLocation();
-
-    mPosition = initialPosition;
+     ROS_DEBUG("KalmanFilterTOA Init Position [%f %f %f]", mPosition.x, mPosition.y, mPosition.z);
     mVelocity = { 0, 0, 0};
 
     estimationCovariance.zeros(6, 6);

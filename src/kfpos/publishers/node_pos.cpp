@@ -42,6 +42,12 @@ int main(int argc, char *argv[])
     int variant = 0;
     int numRangingsToIgnore = 0;
 
+    //IMU
+    bool useImuFixedAccelerationCovariance = false;
+    double imuFixedAccelerationCovariance = 0.0;
+    bool useImuFixedVelocityCovariance = false;
+    double imuFixedVelocityCovariance = 0.0;
+
 
     std::string nodeName = ros::this_node::getName();
 
@@ -106,6 +112,17 @@ int main(int argc, char *argv[])
             n.getParam("imuTopic", imuTopic);
             useTOA = 1;
             useImu = 1;
+
+            n.getParam("useImuFixedAccelerationCovariance", useImuFixedAccelerationCovariance);
+            if (useImuFixedAccelerationCovariance){
+                n.getParam("imuFixedAccelerationCovariance", imuFixedAccelerationCovariance);
+            }
+            
+            n.getParam("useImuFixedVelocityCovariance", useImuFixedVelocityCovariance);
+            if (useImuFixedVelocityCovariance){
+                n.getParam("imuFixedVelocityCovariance", imuFixedVelocityCovariance);
+            }
+            aPosGenerator.setIMUFixedCovariance(useImuFixedAccelerationCovariance, imuFixedAccelerationCovariance, useImuFixedVelocityCovariance, imuFixedVelocityCovariance);
         }
 
         aPosGenerator.setExternalFilesParameters("configPos", "configPX4Flow", "configUWB", "configIMU", "configMAG");

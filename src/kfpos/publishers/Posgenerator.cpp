@@ -127,13 +127,25 @@ void PosGenerator::newIMUMeasurement(const sensor_msgs::Imu::ConstPtr& imuMeasur
   double covarianceAngularVelocity[9];
   double covarianceAcceleration[9];
   VectorDim3 angularVelocity = {imuMeasurement->angular_velocity.x, imuMeasurement->angular_velocity.y, imuMeasurement->angular_velocity.z};
-  VectorDim3 linearAcceleration = {imuMeasurement->linear_acceleration.x, imuMeasurement->linear_acceleration.y, imuMeasurement->linear_acceleration.z};
+  VectorDim3 linearAcceleration = {imuMeasurement->linear_acceleration.x/1000.0, imuMeasurement->linear_acceleration.y/1000.0, imuMeasurement->linear_acceleration.z/1000.0};
     
 
   for (int i = 0; i < 9; ++i)
   {
     covarianceAngularVelocity[i] = imuMeasurement->angular_velocity_covariance[i];
     covarianceAcceleration[i] = imuMeasurement->linear_acceleration_covariance[i];
+  }
+
+  if (mUseImuFixedCovarianceAcceleration){
+      covarianceAcceleration[0] = mImuFixedCovarianceAcceleration;
+      covarianceAcceleration[4] = mImuFixedCovarianceAcceleration;
+      covarianceAcceleration[8] = mImuFixedCovarianceAcceleration;
+  }
+
+  if (mUseImuFixedCovarianceVelocity){
+      covarianceAngularVelocity[0] = mImuFixedCovarianceVelocity;
+      covarianceAngularVelocity[4] = mImuFixedCovarianceVelocity;
+      covarianceAngularVelocity[8] = mImuFixedCovarianceVelocity;
   }
 
   mPositionAlgorithm->newIMUMeasurement(angularVelocity, covarianceAngularVelocity, linearAcceleration, covarianceAcceleration);
@@ -509,7 +521,7 @@ void PosGenerator::initialiseTagList(int id) {
 
 void PosGenerator::setAlgorithm(int algorithm) {
   if (algorithm==ALGORITHM_KF_TOA){
-      if (!mUseInitPosition) {
+      if (mUseInitPosition) {
         mPositionAlgorithm.reset(new KalmanFilterTOA(mAccelerationNoise, mIgnoreWorstAnchorMode, mIgnoreCostThreshold, mInitPosition));
       } else {
         mPositionAlgorithm.reset(new KalmanFilterTOA(mAccelerationNoise ,mIgnoreWorstAnchorMode, mIgnoreCostThreshold));
@@ -536,6 +548,16 @@ void PosGenerator::setAlgorithm(int algorithm) {
 
   mPositionAlgorithm->init();
 }
+
+
+void PosGenerator::setIMUFixedCovariance(bool useFixedAccelerationCovariance, double accelerationCovariance, bool useFixedAngularVelocityCovariance, double velocityCovariance){
+  mUseImuFixedCovarianceAcceleration= useFixedAccelerationCovariance;
+  mUseImuFixedCovarianceVelocity = useFixedAngularVelocityCovariance;
+
+  mImuFixedCovarianceAcceleration = accelerationCovariance;
+  mImuFixedCovarianceVelocity = velocityCovariance;
+}
+
 
 
 void PosGenerator::publishFixedRateReport() {

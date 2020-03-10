@@ -148,6 +148,7 @@ public:
     void setHeuristicIgnore(bool ignoreWorstAnchorMode, double ignoreCostThreshold);
     void setDeviceIdentifiers(int toaTagId);
     void setHeuristicML(bool use2d, int variant, int numRangingsToIgnore);
+    void setIMUFixedCovariance(bool useFixedAccelerationCovariance, double accelerationCovariance, bool useFixedAngularVelocityCovariance, double velocityCovariance);
 
 
     void setAlgorithm(int algorithm);
@@ -209,7 +210,8 @@ private:
     int mVariant;
     int mNumRangingsToIgnore;
 
-
+    bool mUseImuFixedCovarianceAcceleration,mUseImuFixedCovarianceVelocity;
+    double mImuFixedCovarianceAcceleration, mImuFixedCovarianceVelocity;
 
     void initialiseTagList(int id);
     int calculateTagLocationWithRangings(Vector3 *report, int count, int *ranges, double *errorEstimation, double timeLag);

@@ -53,10 +53,12 @@ typedef struct
 
 typedef struct
 {
-	double linearAccelerationX;
-	double linearAccelerationY;
-	double linearAccelerationZ;
-	double covarianceAccelerationXYZ[9];
+	VectorDim3 linearAcceleration;
+	double covarianceLinearAccelerationXYZ[9];
+
+	VectorDim3 angularVelocity;
+	double covarianceAngularVelocityXYZ[9];
+
 
 } ImuMeasurement3D;
 

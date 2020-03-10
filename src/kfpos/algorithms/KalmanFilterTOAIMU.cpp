@@ -49,6 +49,7 @@ bool KalmanFilterTOAIMU::init(){
 void KalmanFilterTOAIMU::newTOAMeasurement(const std::vector<double>& rangings,
         const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag) {
 
+ROS_DEBUG("KalmanFilterTOAIMU new TOA");
     std::vector<RangingMeasurement> measurements;
 
     for (int i = 0; i < rangings.size(); ++i)
@@ -75,13 +76,20 @@ void KalmanFilterTOAIMU::newTOAMeasurement(const std::vector<double>& rangings,
 
 void KalmanFilterTOAIMU::newIMUMeasurement( VectorDim3 angularVelocity,double covarianceAngularVelocity[9],VectorDim3 linearAcceleration, double covarianceAcceleration[9]) {
    
+    ROS_DEBUG("KalmanFilterTOAIMU new IMU");
+
     ImuMeasurement3D measurement;
-    measurement.linearAccelerationX = linearAcceleration.x;
-    measurement.linearAccelerationY = linearAcceleration.y;
-    measurement.linearAccelerationZ = linearAcceleration.z;
+    measurement.linearAcceleration.x = linearAcceleration.x;
+    measurement.linearAcceleration.y = linearAcceleration.y;
+    measurement.linearAcceleration.z = linearAcceleration.z;
+
+    measurement.linearAcceleration.x = linearAcceleration.x;
+    measurement.linearAcceleration.y = linearAcceleration.y;
+    measurement.linearAcceleration.z = linearAcceleration.z;
 
     for(int i=0;i<9;i++){
-        measurement.covarianceAccelerationXYZ[i] = covarianceAcceleration[i];
+        measurement.covarianceLinearAccelerationXYZ[i] = covarianceAcceleration[i];
+        measurement.covarianceAngularVelocityXYZ[i] = covarianceAngularVelocity[i];
     }
 
 
@@ -117,20 +125,17 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
       mLastKFTimestamp = now;
 
     if (!mUseFixedInitialPosition) {
+
         //We try to find the first position using ML
-        if (std::isnan(mPosition.x) ||
-                std::isnan(mPosition.y)) {
-            ROS_INFO("KalmanFilter initPosition is NAN"); 
+        if (std::isnan(mPosition.x) || std::isnan(mPosition.y)  || std::isnan(mPosition.z)) {
+            ROS_DEBUG("KalmanFilter initPosition is NAN"); 
             if (hasRangingMeasurements) {
-                ROS_INFO("KalmanFilter Ranging mode"); 
-                mPosition = mlLocation->estimatePosition(rangingMeasurements, { 1.0, 1.0, 4.0 });
-                ROS_INFO("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
+                ROS_DEBUG("KalmanFilter Ranging mode"); 
+                Vector3 defaultPos = { 1.0, 1.0, 4.0 }; 
+                mPosition = mlLocation->estimatePosition(rangingMeasurements, defaultPos);
+                ROS_DEBUG("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
 
-                mPosition.rotX = 0.0;
-                mPosition.rotY = 0.0;
-                mPosition.rotZ = 0.0;
-                mPosition.rotW = 0.0;
-
+                if (mPosition.x!=defaultPos.x || mPosition.y!=defaultPos.y || mPosition.z!=defaultPos.z){
                 mEstimationCovariance(0,0) = mPosition.covarianceMatrix(0,0);
                 mEstimationCovariance(1,0) = mPosition.covarianceMatrix(1,0);
                 mEstimationCovariance(0,1) = mPosition.covarianceMatrix(0,1);
@@ -157,6 +162,12 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
                 mPosition.covarianceMatrix(7,2) = mEstimationCovariance(8, 2);
 
                 mPosition.covarianceMatrix(7,7) = mEstimationCovariance(8, 8);
+                }
+
+
+
+                ROS_DEBUG("KalmanFilterTOAIMU END new Position ML"); 
+
             }
             return;
         }
@@ -258,9 +269,10 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
 
     if (hasImuMeasurement){
         indexImu = countValid;
-        countValid+=9;
+        countValid+=3;
     }
 
+    ROS_DEBUG("Count valid %d", countValid);
     arma::mat observationCovariance = arma::eye<arma::mat>(countValid, countValid);
     arma::vec measurements(countValid);
 
@@ -276,23 +288,34 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
     }
 
     if (hasImuMeasurement){
-        measurements(indexImu) = imuMeasurement.linearAccelerationX;
-        measurements(indexImu+1) = imuMeasurement.linearAccelerationY;
-        measurements(indexImu+2) = imuMeasurement.linearAccelerationZ;
+        ROS_DEBUG("Has imu measurement");
+        measurements(indexImu) = imuMeasurement.linearAcceleration.x;
+        measurements(indexImu+1) = imuMeasurement.linearAcceleration.y;
+        measurements(indexImu+2) = imuMeasurement.linearAcceleration.z;
 
-        observationCovariance(indexImu, indexImu) = imuMeasurement.covarianceAccelerationXYZ[0];
-        observationCovariance(indexImu, indexImu+1) = imuMeasurement.covarianceAccelerationXYZ[1];
-        observationCovariance(indexImu, indexImu+2) = imuMeasurement.covarianceAccelerationXYZ[2];
+        observationCovariance(indexImu, indexImu) = imuMeasurement.covarianceLinearAccelerationXYZ[0];
+        observationCovariance(indexImu, indexImu+1) = imuMeasurement.covarianceLinearAccelerationXYZ[1];
+        observationCovariance(indexImu, indexImu+2) = imuMeasurement.covarianceLinearAccelerationXYZ[2];
+        observationCovariance(indexImu+1, indexImu) = imuMeasurement.covarianceLinearAccelerationXYZ[3];
+        observationCovariance(indexImu+1, indexImu+1) = imuMeasurement.covarianceLinearAccelerationXYZ[4];
+        observationCovariance(indexImu+1, indexImu+2) = imuMeasurement.covarianceLinearAccelerationXYZ[5];
+        observationCovariance(indexImu+2, indexImu) = imuMeasurement.covarianceLinearAccelerationXYZ[6];
+        observationCovariance(indexImu+2, indexImu+1) = imuMeasurement.covarianceLinearAccelerationXYZ[7];
+        observationCovariance(indexImu+2, indexImu+2) = imuMeasurement.covarianceLinearAccelerationXYZ[8];
 
-        observationCovariance(indexImu+1, indexImu) = imuMeasurement.covarianceAccelerationXYZ[3];
-        observationCovariance(indexImu+1, indexImu+1) = imuMeasurement.covarianceAccelerationXYZ[4];
-        observationCovariance(indexImu+1, indexImu+2) = imuMeasurement.covarianceAccelerationXYZ[5];
 
-        observationCovariance(indexImu+2, indexImu) = imuMeasurement.covarianceAccelerationXYZ[6];
-        observationCovariance(indexImu+2, indexImu+1) = imuMeasurement.covarianceAccelerationXYZ[7];
-        observationCovariance(indexImu+2, indexImu+2) = imuMeasurement.covarianceAccelerationXYZ[8];
+        // observationCovariance(indexImu+3, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[0];
+        // observationCovariance(indexImu+3, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[1];
+        // observationCovariance(indexImu+3, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[2];
+        // observationCovariance(indexImu+4, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[3];
+        // observationCovariance(indexImu+4, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[4];
+        // observationCovariance(indexImu+4, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[5];
+        // observationCovariance(indexImu+5, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[6];
+        // observationCovariance(indexImu+5, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[7];
+        // observationCovariance(indexImu+5, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[8];
     }
 
+    //observationCovariance.print();
     arma::mat jacobian(countValid, 9);
     arma::mat kalmanGain;
     arma::mat invObsCovariance = arma::inv(observationCovariance);
@@ -308,11 +331,16 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
                       hasRangingMeasurements, hasImuMeasurement,rangingMeasurements);
         arma::vec predictionError = measurements - output;
 
+        ROS_DEBUG("After sensorOutputs");
+
         arma::vec predictionDiff = predictedState - state;
         arma::vec costMat = predictionError.t() * invObsCovariance * predictionError
                     + predictionDiff.t() * invEstCovariance * predictionDiff;
 
         double newCost = costMat(0);           
+
+        ROS_DEBUG("New cost: %f", newCost);
+
         if (std::abs(cost - newCost) / cost < minRelativeError) {
             break;
         }
@@ -322,10 +350,13 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
             jacobianRangings(jacobian, currentPosition, rangingMeasurements, indexRanging);
         }
 
+        ROS_DEBUG("After jacobianRangings");
+
         if (hasImuMeasurement) {
             jacobianImu(jacobian, currentAcceleration, indexImu);
         }
 
+        ROS_DEBUG("After jacobianImu");
 
         kalmanGain = mEstimationCovariance * jacobian.t() *
                            inv(jacobian * mEstimationCovariance * jacobian.t() + observationCovariance);
@@ -353,7 +384,7 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
 
     if (hasImuMeasurement){
         indexImu = countValid;
-        countValid+=9;
+        countValid+=3;
     }
     
     arma::vec output(countValid);
@@ -368,9 +399,9 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
 
     if (hasImuMeasurement) {
         ImuOutput3D sensorPrediction = imuOutput(acceleration);
-        output(indexImu) = sensorPrediction.accelX;
-        output(indexImu + 1) = sensorPrediction.accelY;
-        output(indexImu + 2) = sensorPrediction.accelZ;
+        output(indexImu) = sensorPrediction.linearAcceleration.x;
+        output(indexImu + 1) = sensorPrediction.linearAcceleration.y;
+        output(indexImu + 2) = sensorPrediction.linearAcceleration.z;
     }
 
     
@@ -381,9 +412,9 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
 KalmanFilterTOAIMU::ImuOutput3D KalmanFilterTOAIMU::imuOutput(const Vector3& acceleration) const{
     ImuOutput3D output;
 
-    output.accelX =acceleration.x;
-    output.accelY =acceleration.y;
-    output.accelZ = acceleration.z;
+    output.linearAcceleration.x =acceleration.x;
+    output.linearAcceleration.y =acceleration.y;
+    output.linearAcceleration.z = acceleration.z;
 
     return output;
 }
@@ -448,7 +479,7 @@ void KalmanFilterTOAIMU::jacobianImu(arma::mat& jacobian, const Vector3& acceler
     jacobian(indexStartRow, 5) = 0;
     jacobian(indexStartRow, 6) = acceleration.x;
     jacobian(indexStartRow, 7) = 0;
-    jacobian(indexStartRow, 9) = 0;
+    jacobian(indexStartRow, 8) = 0;
     
     jacobian(indexStartRow +1, 0) = 0;
     jacobian(indexStartRow +1, 1) = 0;
@@ -493,7 +524,7 @@ bool KalmanFilterTOAIMU::getPose(Vector3& pose) {
                         mVelocity.x, mVelocity.y, mVelocity.z,
                         mAcceleration.x, mAcceleration.y, mAcceleration.z,
                       };
-
+    ROS_DEBUG("KalmanFilterTOAIMU get Pose");
     // Prediction
     arma::mat predictionStep(9, 9);
     arma::mat predictionCovariance(9, 9);

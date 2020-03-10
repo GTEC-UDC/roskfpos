@@ -34,9 +34,8 @@ private:
                                                 bool hasImuMeasurement,const ImuMeasurement3D& imuMeasurement);
 
     struct ImuOutput3D {
-        double accelX;
-        double accelY;
-        double accelZ;
+        VectorDim3 linearAcceleration;
+        VectorDim3 angularVelocity;
     };
     
     arma::vec kalmanStep3D(const arma::vec& predictedState, 

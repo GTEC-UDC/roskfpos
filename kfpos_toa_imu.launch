@@ -24,5 +24,9 @@
         <param name="initPositionX" type="double" value="$(arg initPositionX)" />
         <param name="initPositionY" type="double" value="$(arg initPositionY)" />
         <param name="initPositionZ" type="double" value="$(arg initPositionZ)" />
+        <param name="useImuFixedAccelerationCovariance" type="bool" value="true"></param>
+        <param name="imuFixedAccelerationCovariance" type="double" value="0.0001"></param>
+        <param name="useImuFixedVelocityCovariance" type="bool" value="true"></param>
+        <param name="imuFixedVelocityCovariance" type="double" value="0.0001"></param>
     </node>
 </launch>

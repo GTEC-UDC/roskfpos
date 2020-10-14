@@ -471,14 +471,19 @@ void PosGenerator::publishPositionReport(Vector3 report) {
   odomMsg.header.frame_id = "odom";
   odomMsg.header.stamp =  newPos.header.stamp;
 
-  odomMsg.child_frame_id = "pioneer3at::chassis";
+  odomMsg.child_frame_id = "6f1d";
 
   ros_pub_odom.publish(odomMsg);
 
+ mBroadcaster.sendTransform(
+      tf::StampedTransform(
+        tf::Transform(tf::Quaternion(0, -0.707,0, 0.707), tf::Vector3(report.x,report.y,report.z)),
+        newPos.header.stamp,"world", "6f1d"));
+
   mBroadcaster.sendTransform(
       tf::StampedTransform(
-        tf::Transform(tf::Quaternion(report.rotX, report.rotY, report.rotZ, report.rotW), tf::Vector3(report.x, report.y, report.z)),
-        newPos.header.stamp,"odom", "pioneer3at::chassis"));
+        tf::Transform(tf::Quaternion(0, 0,0,1), tf::Vector3(report.x,report.y,report.z)),
+        newPos.header.stamp,"world", "odom"));
 
   }
 

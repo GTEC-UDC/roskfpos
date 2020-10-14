@@ -37,7 +37,12 @@ private:
         VectorDim3 linearAcceleration;
         VectorDim3 angularVelocity;
     };
-    
+
+    struct Quaternion
+    {
+        double w, x, y, z;
+    };
+        
     arma::vec kalmanStep3D(const arma::vec& predictedState, 
                             bool hasRangingMeasurements, const std::vector<RangingMeasurement>& allRangingMeasurements, 
                             bool hasImuMeasurement,const ImuMeasurement3D& imuMeasurement,
@@ -48,19 +53,23 @@ private:
     void predictionErrorCovariance(arma::mat& matrix, double timeLag) const;
     void stateToPose(Vector3& pose,const arma::vec& state, const arma::mat& estimationCovariance);
     void jacobianRangings(arma::mat& jacobian, const Vector3& position, const std::vector<RangingMeasurement>& rangingMeasurements, int indexStartRow) const;
-    void jacobianImu(arma::mat& jacobian, const Vector3& acceleration, int indexStartRow) const;
+    void jacobianImu(arma::mat& jacobian, const Vector3& acceleration, const Vector3& angularVelocity, int indexStartRow) const;
     
 
-    arma::vec sensorOutputs(const Vector3& position, const Vector3& speed, const Vector3& acceleration,double timeLag,
-            bool hasRangingMeasurements, bool hasImuMeasurement,const std::vector<RangingMeasurement>& rangingMeasurements) const;
+    arma::vec sensorOutputs(const Vector3& currentPosition, const Vector3& currentLinearSpeed,const Vector3& currentAcceleration,
+    const Vector3 currentAngles, const Vector3 currentAngularVelocity, double timeLag,  bool hasRangingMeasurements, 
+    bool hasImuMeasurement,const std::vector<RangingMeasurement>& rangingMeasurements) const;
 
-    ImuOutput3D imuOutput(const Vector3& acceleration) const;
+    ImuOutput3D imuOutput(const Vector3& acceleration, const Vector3& angularVelocity, const Vector3 angles, double timeLag) const;
+    Quaternion ToQuaternion(double yaw, double pitch, double roll);
 
     double mJolt;
 
     Vector3 mPosition;
     Vector3 mVelocity;
     Vector3 mAcceleration;
+    Vector3 mAngles;
+    Vector3 mAngularVelocity;
 
     double mTimeLag;
     double mAccelerationNoise;

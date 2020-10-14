@@ -13,10 +13,14 @@ KalmanFilterTOAIMU::KalmanFilterTOAIMU(double accelerationNoise, double jolt) :
     mPosition = { NAN, NAN, NAN};
     mVelocity = { 0, 0, 0};
     mAcceleration = { 0, 0, 0};
+    mAngles = {0, 0,0};
+    mAngularVelocity = {0,0,0};
+
+
 
     mHasImuMeasurement=false;
 
-    mEstimationCovariance.zeros(9, 9);
+    mEstimationCovariance.zeros(15, 15);
     mLastKFTimestamp =  std::chrono::steady_clock::time_point::min();
 }
 
@@ -33,15 +37,19 @@ KalmanFilterTOAIMU::KalmanFilterTOAIMU(double accelerationNoise, double jolt, Ve
     mPosition = initialPosition;
     mVelocity = { 0, 0, 0};
     mAcceleration = { 0, 0, 0};
+    mAngles = {0,0,0};
+    mAngularVelocity = {0,0,0};
 
     mHasImuMeasurement=false;
 
-    mEstimationCovariance.zeros(9, 9);
+    mEstimationCovariance.zeros(15, 15);
     mLastKFTimestamp =  std::chrono::steady_clock::time_point::min();
 }
 
 
 bool KalmanFilterTOAIMU::init(){
+
+
     return true;
 }
 
@@ -49,7 +57,7 @@ bool KalmanFilterTOAIMU::init(){
 void KalmanFilterTOAIMU::newTOAMeasurement(const std::vector<double>& rangings,
         const std::vector<Beacon>& beacons, const std::vector<double>& errorEstimations, double timeLag) {
 
-ROS_DEBUG("KalmanFilterTOAIMU new TOA");
+ROS_INFO("KalmanFilterTOAIMU new TOA");
     std::vector<RangingMeasurement> measurements;
 
     for (int i = 0; i < rangings.size(); ++i)
@@ -76,16 +84,16 @@ ROS_DEBUG("KalmanFilterTOAIMU new TOA");
 
 void KalmanFilterTOAIMU::newIMUMeasurement( VectorDim3 angularVelocity,double covarianceAngularVelocity[9],VectorDim3 linearAcceleration, double covarianceAcceleration[9]) {
    
-    ROS_DEBUG("KalmanFilterTOAIMU new IMU");
+    ROS_INFO("KalmanFilterTOAIMU new IMU");
 
     ImuMeasurement3D measurement;
     measurement.linearAcceleration.x = linearAcceleration.x;
     measurement.linearAcceleration.y = linearAcceleration.y;
     measurement.linearAcceleration.z = linearAcceleration.z;
 
-    measurement.linearAcceleration.x = linearAcceleration.x;
-    measurement.linearAcceleration.y = linearAcceleration.y;
-    measurement.linearAcceleration.z = linearAcceleration.z;
+    measurement.angularVelocity.x = angularVelocity.x;
+    measurement.angularVelocity.y = angularVelocity.y;
+    measurement.angularVelocity.z = angularVelocity.z;
 
     for(int i=0;i<9;i++){
         measurement.covarianceLinearAccelerationXYZ[i] = covarianceAcceleration[i];
@@ -128,12 +136,12 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
 
         //We try to find the first position using ML
         if (std::isnan(mPosition.x) || std::isnan(mPosition.y)  || std::isnan(mPosition.z)) {
-            ROS_DEBUG("KalmanFilter initPosition is NAN"); 
+            ROS_INFO("KalmanFilter initPosition is NAN"); 
             if (hasRangingMeasurements) {
-                ROS_DEBUG("KalmanFilter Ranging mode"); 
+                ROS_INFO("KalmanFilter Ranging mode"); 
                 Vector3 defaultPos = { 1.0, 1.0, 4.0 }; 
                 mPosition = mlLocation->estimatePosition(rangingMeasurements, defaultPos);
-                ROS_DEBUG("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
+                ROS_INFO("KalmanFilter new mPosition [%f %f %f]", mPosition.x, mPosition.y, mPosition.z); 
 
                 if (mPosition.x!=defaultPos.x || mPosition.y!=defaultPos.y || mPosition.z!=defaultPos.z){
                 mEstimationCovariance(0,0) = mPosition.covarianceMatrix(0,0);
@@ -141,9 +149,9 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
                 mEstimationCovariance(0,1) = mPosition.covarianceMatrix(0,1);
                 mEstimationCovariance(1,1) = mPosition.covarianceMatrix(1,1);
 
-                mPosition.covarianceMatrix = arma::eye<arma::mat>(9, 9) * 0.01;
+                mPosition.covarianceMatrix = arma::eye<arma::mat>(6, 6) * 0.01;
 
-                mPosition.covarianceMatrix(0,0) = mPosition.covarianceMatrix(0,0);
+/*                mPosition.covarianceMatrix(0,0) = mPosition.covarianceMatrix(0,0);
                 mPosition.covarianceMatrix(0,1) = mPosition.covarianceMatrix(0,1);
                 mPosition.covarianceMatrix(0,2) = mPosition.covarianceMatrix(0,2);
                 mPosition.covarianceMatrix(1,0) = mPosition.covarianceMatrix(1,0);
@@ -151,22 +159,13 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
                 mPosition.covarianceMatrix(1,2) = mPosition.covarianceMatrix(1,2);
                 mPosition.covarianceMatrix(2,0) = mPosition.covarianceMatrix(2,0);
                 mPosition.covarianceMatrix(2,1) = mPosition.covarianceMatrix(2,1);
-                mPosition.covarianceMatrix(2,2) = mPosition.covarianceMatrix(2,2);
+                mPosition.covarianceMatrix(2,2) = mPosition.covarianceMatrix(2,2);*/
 
-                mPosition.covarianceMatrix(0,7) = mEstimationCovariance(0, 8);
-                mPosition.covarianceMatrix(1,7) = mEstimationCovariance(1, 8);
-                mPosition.covarianceMatrix(2,7) = mEstimationCovariance(2, 8);
-
-                mPosition.covarianceMatrix(7,0) = mEstimationCovariance(8, 0);
-                mPosition.covarianceMatrix(7,1) = mEstimationCovariance(8, 1);
-                mPosition.covarianceMatrix(7,2) = mEstimationCovariance(8, 2);
-
-                mPosition.covarianceMatrix(7,7) = mEstimationCovariance(8, 8);
                 }
 
 
 
-                ROS_DEBUG("KalmanFilterTOAIMU END new Position ML"); 
+                ROS_INFO("KalmanFilterTOAIMU END new Position ML"); 
 
             }
             return;
@@ -175,12 +174,14 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
 
     arma::vec state = { mPosition.x, mPosition.y, mPosition.z,
                         mVelocity.x, mVelocity.y, mVelocity.z,
-                        mAcceleration.x, mAcceleration.y, mAcceleration.z
+                        mAcceleration.x, mAcceleration.y, mAcceleration.z,
+                        mAngles.x, mAngles.y, mAngles.z,
+                        mAngularVelocity.x, mAngularVelocity.y, mAngularVelocity.z
                       };
 
     // Prediction
-    arma::mat predictionStep(9, 9);
-    arma::mat predictionCovariance(9, 9);
+    arma::mat predictionStep(15, 15);
+    arma::mat predictionCovariance(15, 15);
 
     
     predictionMatrix(predictionStep, timeLag);
@@ -197,11 +198,22 @@ void KalmanFilterTOAIMU::estimatePositionKF(bool hasRangingMeasurements, const s
         hasImuMeasurement, imuMeasurement,
          20, 1e-4, timeLag);
 
+
+
     mVelocity.x = state(3);
     mVelocity.y = state(4);
     mVelocity.z = state(5);
+    mAcceleration.x = state(6);
+    mAcceleration.y = state(7);
+    mAcceleration.z = state(8);
+    mAngles.x = state(9);
+    mAngles.y = state(10);
+    mAngles.z = state(11);
+    mAngularVelocity.x = state(12);
+    mAngularVelocity.y = state(13);
+    mAngularVelocity.z = state(14);
 
-
+    //Position is set within the next function
     stateToPose(mPosition, state, mEstimationCovariance);
 }
 
@@ -212,20 +224,22 @@ void KalmanFilterTOAIMU::stateToPose(Vector3& pose, const arma::vec& state, cons
     pose.y = state(1);
     pose.z = state(2);
 
-    pose.rotX = 0.0;
-    pose.rotY = 0.0;
-    pose.rotZ = 0.0;
-    pose.rotW = 0.0;
+    Quaternion quat = ToQuaternion(state(9), state(10), state(11));
+
+    pose.rotX = quat.x;
+    pose.rotY = quat.y;
+    pose.rotZ = quat.z;
+    pose.rotW = quat.w;
 
     pose.linearSpeedX = state(3);
     pose.linearSpeedY = state(4);
     pose.linearSpeedZ = state(5);
 
-    pose.angularSpeedX = state(6);
-    pose.angularSpeedY = state(7);
-    pose.angularSpeedZ = state(8);
+    pose.angularSpeedX = state(12);
+    pose.angularSpeedY = state(13);
+    pose.angularSpeedZ = state(14);
 
-    pose.covarianceMatrix = arma::eye<arma::mat>(9, 9) * 0.01;
+    pose.covarianceMatrix = arma::eye<arma::mat>(6, 6) * 0.01;
 
     pose.covarianceMatrix(0,0) =  estimationCovariance(0, 0);
     pose.covarianceMatrix(0,1) =  estimationCovariance(0, 1);
@@ -239,15 +253,17 @@ void KalmanFilterTOAIMU::stateToPose(Vector3& pose, const arma::vec& state, cons
     pose.covarianceMatrix(2,1) =  estimationCovariance(2, 1);
     pose.covarianceMatrix(2,2) =  estimationCovariance(2, 2);
 
-    pose.covarianceMatrix(0,7) = estimationCovariance(0, 8);
-    pose.covarianceMatrix(1,7) = estimationCovariance(1, 8);
-    pose.covarianceMatrix(2,7) = estimationCovariance(2, 8);
+    pose.covarianceMatrix(3,0) = estimationCovariance(9, 9);
+    pose.covarianceMatrix(3,1) = estimationCovariance(9, 10);
+    pose.covarianceMatrix(3,2) = estimationCovariance(9, 11);
 
-    pose.covarianceMatrix(7,0) = estimationCovariance(8, 0);
-    pose.covarianceMatrix(7,1) = estimationCovariance(8, 1);
-    pose.covarianceMatrix(7,2) = estimationCovariance(8, 2);
+    pose.covarianceMatrix(4,0) = estimationCovariance(10, 9);
+    pose.covarianceMatrix(4,1) = estimationCovariance(10, 10);
+    pose.covarianceMatrix(4,2) = estimationCovariance(10, 11);
 
-    pose.covarianceMatrix(7,7) = estimationCovariance(8, 8);   
+    pose.covarianceMatrix(5,0) = estimationCovariance(11, 9);
+    pose.covarianceMatrix(5,1) = estimationCovariance(11, 10);
+    pose.covarianceMatrix(5,2) = estimationCovariance(11, 11);
 }
 
 arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState, 
@@ -269,10 +285,10 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
 
     if (hasImuMeasurement){
         indexImu = countValid;
-        countValid+=3;
+        countValid+=6;
     }
 
-    ROS_DEBUG("Count valid %d", countValid);
+    ROS_INFO("Count valid %d", countValid);
     arma::mat observationCovariance = arma::eye<arma::mat>(countValid, countValid);
     arma::vec measurements(countValid);
 
@@ -288,10 +304,14 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
     }
 
     if (hasImuMeasurement){
-        ROS_DEBUG("Has imu measurement");
+        ROS_INFO("Has imu measurement");
         measurements(indexImu) = imuMeasurement.linearAcceleration.x;
         measurements(indexImu+1) = imuMeasurement.linearAcceleration.y;
         measurements(indexImu+2) = imuMeasurement.linearAcceleration.z;
+
+        measurements(indexImu+3) = imuMeasurement.angularVelocity.x;
+        measurements(indexImu+4) = imuMeasurement.angularVelocity.y;
+        measurements(indexImu+5) = imuMeasurement.angularVelocity.z;
 
         observationCovariance(indexImu, indexImu) = imuMeasurement.covarianceLinearAccelerationXYZ[0];
         observationCovariance(indexImu, indexImu+1) = imuMeasurement.covarianceLinearAccelerationXYZ[1];
@@ -303,20 +323,19 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
         observationCovariance(indexImu+2, indexImu+1) = imuMeasurement.covarianceLinearAccelerationXYZ[7];
         observationCovariance(indexImu+2, indexImu+2) = imuMeasurement.covarianceLinearAccelerationXYZ[8];
 
-
-        // observationCovariance(indexImu+3, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[0];
-        // observationCovariance(indexImu+3, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[1];
-        // observationCovariance(indexImu+3, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[2];
-        // observationCovariance(indexImu+4, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[3];
-        // observationCovariance(indexImu+4, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[4];
-        // observationCovariance(indexImu+4, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[5];
-        // observationCovariance(indexImu+5, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[6];
-        // observationCovariance(indexImu+5, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[7];
-        // observationCovariance(indexImu+5, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[8];
+        observationCovariance(indexImu+3, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[0];
+        observationCovariance(indexImu+3, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[1];
+        observationCovariance(indexImu+3, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[2];
+        observationCovariance(indexImu+4, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[3];
+        observationCovariance(indexImu+4, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[4];
+        observationCovariance(indexImu+4, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[5];
+        observationCovariance(indexImu+5, indexImu+3) = imuMeasurement.covarianceAngularVelocityXYZ[6];
+        observationCovariance(indexImu+5, indexImu+4) = imuMeasurement.covarianceAngularVelocityXYZ[7];
+        observationCovariance(indexImu+5, indexImu+5) = imuMeasurement.covarianceAngularVelocityXYZ[8];
     }
 
     //observationCovariance.print();
-    arma::mat jacobian(countValid, 9);
+    arma::mat jacobian(countValid, 15);
     arma::mat kalmanGain;
     arma::mat invObsCovariance = arma::inv(observationCovariance);
     arma::mat invEstCovariance = arma::pinv(mEstimationCovariance);
@@ -326,12 +345,16 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
         Vector3 currentPosition = { state(0), state(1), state(2) };
         Vector3 currentSpeed = { state(3), state(4), state(5) };
         Vector3 currentAcceleration = { state(6), state(7), state(8) };
+        Vector3 currentAngles = { state(9), state(10), state(11) };
+        Vector3 currentAngularVelocity = { state(12), state(13), state(14)};
+
+        ROS_INFO("SensorsOutput");
         
-        arma::vec output = sensorOutputs(currentPosition, currentSpeed, currentAcceleration, timeLag,
+        arma::vec output = sensorOutputs(currentPosition, currentSpeed, currentAcceleration, currentAngles, currentAngularVelocity, timeLag,
                       hasRangingMeasurements, hasImuMeasurement,rangingMeasurements);
         arma::vec predictionError = measurements - output;
 
-        ROS_DEBUG("After sensorOutputs");
+        ROS_INFO("After sensorOutputs");
 
         arma::vec predictionDiff = predictedState - state;
         arma::vec costMat = predictionError.t() * invObsCovariance * predictionError
@@ -339,7 +362,7 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
 
         double newCost = costMat(0);           
 
-        ROS_DEBUG("New cost: %f", newCost);
+        ROS_INFO("New cost: %f", newCost);
 
         if (std::abs(cost - newCost) / cost < minRelativeError) {
             break;
@@ -350,13 +373,13 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
             jacobianRangings(jacobian, currentPosition, rangingMeasurements, indexRanging);
         }
 
-        ROS_DEBUG("After jacobianRangings");
+        ROS_INFO("After jacobianRangings");
 
         if (hasImuMeasurement) {
-            jacobianImu(jacobian, currentAcceleration, indexImu);
+            jacobianImu(jacobian, currentAcceleration, currentAngularVelocity, indexImu);
         }
 
-        ROS_DEBUG("After jacobianImu");
+        ROS_INFO("After jacobianImu");
 
         kalmanGain = mEstimationCovariance * jacobian.t() *
                            inv(jacobian * mEstimationCovariance * jacobian.t() + observationCovariance);
@@ -366,15 +389,16 @@ arma::vec KalmanFilterTOAIMU::kalmanStep3D(const arma::vec& predictedState,
         state = state + direction;
     }
 
-    mEstimationCovariance = (arma::eye<arma::mat>(9, 9) - kalmanGain * jacobian) * mEstimationCovariance;
+    mEstimationCovariance = (arma::eye<arma::mat>(15, 15) - kalmanGain * jacobian) * mEstimationCovariance;
     return state;
 }
 
 
 
 
-arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vector3& speed, const Vector3& acceleration,double timeLag,
-    bool hasRangingMeasurements, bool hasImuMeasurement,const std::vector<RangingMeasurement>& rangingMeasurements) const {
+arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& currentPosition, const Vector3& currentLinearSpeed,const Vector3& currentAcceleration,
+    const Vector3 currentAngles, const Vector3 currentAngularVelocity, double timeLag,  bool hasRangingMeasurements, 
+    bool hasImuMeasurement,const std::vector<RangingMeasurement>& rangingMeasurements) const {
     int countValid = 0;
     int indexImu= 0, indexRanging= 0;
 
@@ -384,12 +408,12 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
 
     if (hasImuMeasurement){
         indexImu = countValid;
-        countValid+=3;
+        countValid+=6;
     }
     
     arma::vec output(countValid);
     if (hasRangingMeasurements) {
-        std::vector<double> distances = mlLocation->distanceToBeacons(position, rangingMeasurements);
+        std::vector<double> distances = mlLocation->distanceToBeacons(currentPosition, rangingMeasurements);
         int v = 0;
         for (const auto& r : rangingMeasurements) {
             output(v + indexRanging) = distances[v];
@@ -398,10 +422,13 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
     }
 
     if (hasImuMeasurement) {
-        ImuOutput3D sensorPrediction = imuOutput(acceleration);
+        ImuOutput3D sensorPrediction = imuOutput(currentAcceleration, currentAngularVelocity, currentAngles, timeLag);
         output(indexImu) = sensorPrediction.linearAcceleration.x;
         output(indexImu + 1) = sensorPrediction.linearAcceleration.y;
         output(indexImu + 2) = sensorPrediction.linearAcceleration.z;
+        output(indexImu + 3) = sensorPrediction.angularVelocity.x;
+        output(indexImu + 4) = sensorPrediction.angularVelocity.y;
+        output(indexImu + 5) = sensorPrediction.angularVelocity.z;
     }
 
     
@@ -409,27 +436,68 @@ arma::vec KalmanFilterTOAIMU::sensorOutputs(const Vector3& position, const Vecto
 }
 
 
-KalmanFilterTOAIMU::ImuOutput3D KalmanFilterTOAIMU::imuOutput(const Vector3& acceleration) const{
+KalmanFilterTOAIMU::ImuOutput3D KalmanFilterTOAIMU::imuOutput(const Vector3& acceleration, const Vector3& angularVelocity, const Vector3 angles, double timeLag) const{
     ImuOutput3D output;
+    arma::mat rotationMatrix;
 
-    output.linearAcceleration.x =acceleration.x;
-    output.linearAcceleration.y =acceleration.y;
-    output.linearAcceleration.z = acceleration.z;
+    ROS_INFO("ImuOutput");
+
+    rotationMatrix << cos(mAngles.x)*cos(mAngles.y) << cos(mAngles.x)*sin(mAngles.y)*sin(mAngles.z) - sin(mAngles.x)*cos(mAngles.z) <<  cos(mAngles.x)*sin(mAngles.y)*cos(mAngles.z) + sin(mAngles.x)*sin(mAngles.z) << arma::endr
+                   << sin(mAngles.x)*cos(mAngles.y) << sin(mAngles.x)*sin(mAngles.y)*sin(mAngles.z) + cos(mAngles.x)*cos(mAngles.z) <<  sin(mAngles.x)*sin(mAngles.y)*cos(mAngles.z) - cos(mAngles.x)*sin(mAngles.z) << arma::endr
+                   << -sin(mAngles.y) << cos(mAngles.y)*sin(mAngles.z) <<  cos(mAngles.y)*cos(mAngles.z) << arma::endr;
+
+    arma::mat invRotationMatrix = arma::inv(rotationMatrix);
+
+    arma::vec accel({acceleration.x, acceleration.y, acceleration.z});
+    arma::vec angVel({angularVelocity.x, angularVelocity.y, angularVelocity.z});
+
+    arma::mat accelTag = invRotationMatrix*accel;
+    arma::mat velTag = invRotationMatrix*angVel;
+
+    output.linearAcceleration.x = accelTag(0);
+    output.linearAcceleration.y = accelTag(1);
+    output.linearAcceleration.z = accelTag(2);
+
+    output.angularVelocity.x = angVel(0);
+    output.angularVelocity.y = angVel(1);
+    output.angularVelocity.z = angVel(2);
+
+     ROS_INFO("ImuOutput END");
 
     return output;
 }
 
 
 void KalmanFilterTOAIMU::predictionMatrix(arma::mat& matrix, double timeLag) const {
-    matrix << 1 << 0 << 0 << timeLag << 0 << 0 << timeLag*timeLag/2 << 0 << 0  << arma::endr
-           << 0 << 1 << 0 << 0 << timeLag << 0 << 0 << timeLag*timeLag/2 << 0  << arma::endr
-           << 0 << 0 << 1 << 0 << 0 << timeLag << 0 << 0 << timeLag*timeLag/2  << arma::endr
+    //<< x << y << z << vx << vy << vz << ax << ay << az << an_x << an_y << an_z << va_x << va_y << va_z 
+
+
+    matrix = {{1,0,0,timeLag,0,0, timeLag*timeLag/2,0,0,0,0,0,0,0,0},
+              {0,1,0,0,timeLag,0, 0,timeLag*timeLag/2,0,0,0,0,0,0,0},
+              {0,0,1,0,0,timeLag, 0,0,timeLag*timeLag/2,0,0,0,0,0,0},
+              {0,0,0,1,0,0,timeLag,0,0,0,0,0,0,0,0},
+              {0,0,0,0,1,0,0,timeLag,0,0,0,0,0,0,0},
+              {0,0,0,0,0,1,0,0,timeLag,0,0,0,0,0,0},
+              {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0},
+              {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0},
+              {0,0,0,0,0,0,0,0,1,0,0,0,0,0,0},
+              {0,0,0,0,0,0,0,0,0,1,0,0,timeLag,0,0},
+              {0,0,0,0,0,0,0,0,0,0,1,0,0,timeLag,0},
+              {0,0,0,0,0,0,0,0,0,0,0,1,0,0,timeLag},
+              {0,0,0,0,0,0,0,0,0,0,0,0,1,0,0},
+              {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0},
+              {0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}};
+
+/*    matrix << 1 << 0 << 0   << timeLag << 0       << 0 << timeLag*timeLag/2 << 0 << 0  << 0 << 0 << 0 << 0 << 0 << 0<< arma::endr
+           << 0 << 1 << 0   << 0       << timeLag << 0 << 0                 << timeLag*timeLag/2 << 0  << 0 << 0 << 0 << 0 << 0 << 0<< arma::endr
+
+
            << 0 << 0 << 0 << 1 << 0 << 0 << timeLag << 0 << 0 << arma::endr
            << 0 << 0 << 0 << 0 << 1 << 0 << 0 << timeLag << 0 << arma::endr
            << 0 << 0 << 0 << 0 << 0 << 1 << 0 << 0 << timeLag << arma::endr
            << 0 << 0 << 0 << 0 << 0 << 0 << 1 << 0 << 0 << arma::endr
            << 0 << 0 << 0 << 0 << 0 << 0 << 0 << 1 << 0 << arma::endr
-           << 0 << 0 << 0 << 0 << 0 << 0 << 0 << 0 << 1 << arma::endr;
+           << 0 << 0 << 0 << 0 << 0 << 0 << 0 << 0 << 1 << arma::endr;*/
 }
 
 
@@ -440,7 +508,10 @@ void KalmanFilterTOAIMU::predictionErrorCovariance(arma::mat& matrix, double tim
     double a = mAccelerationNoise;
     double j = mJolt;
 
-    matrix << j*t3*t3 << 0 << 0 << j*t3*t2 << 0 << 0 << j*t3*t << 0 << 0 << arma::endr
+    matrix.zeros(); 
+    matrix.eye(); 
+    matrix = matrix*mJolt*t3*t3;
+/*    matrix << j*t3*t3 << 0 << 0 << j*t3*t2 << 0 << 0 << j*t3*t << 0 << 0 << arma::endr
            << 0 << j*t3*t3 << 0 << 0 << j*t3*t2 << 0 << 0 << j*t3*t << 0 << arma::endr
            << 0 << 0 << j*t3*t3 << 0 << 0 << j*t3*t2 << 0 << 0 << j*t3*t << arma::endr
            << j*t3*t2 << 0 << 0 << j*t2*t2 << 0 << 0 << j*t2*t << 0 << 0 << arma::endr
@@ -448,59 +519,29 @@ void KalmanFilterTOAIMU::predictionErrorCovariance(arma::mat& matrix, double tim
            << 0 << 0 << j*t3*t2 << 0 << 0 << j*t2*t2 << 0 << 0 << j*t2*t  << arma::endr
            << j*t3*t << 0 << 0 << j*t2*t << 0 << 0 << j*t*t << 0 << 0 << arma::endr 
            << 0 << j*t3*t << 0 << 0 << j*t2*t << 0 << 0 << j*t*t << 0 << arma::endr
-           << 0 << 0 << j*t3*t << 0 << 0 << j*t2*t << 0 << 0 << j*t*t << arma::endr;
+           << 0 << 0 << j*t3*t << 0 << 0 << j*t2*t << 0 << 0 << j*t*t << arma::endr;*/
 }
 
 void KalmanFilterTOAIMU::jacobianRangings(arma::mat& jacobian, const Vector3& position, const std::vector<RangingMeasurement>& rangingMeasurements, int indexStartRow) const {
     std::vector<double> distances = mlLocation->distanceToBeacons(position, rangingMeasurements);
     int i = 0;
     for (auto const& r : rangingMeasurements){
-        jacobian(i+indexStartRow, 0) = (position.x - r.beacon.position.x) / distances[i];
-        jacobian(i+indexStartRow, 1) = (position.y - r.beacon.position.y) / distances[i];
-        jacobian(i+indexStartRow, 2) = (position.z - r.beacon.position.z) / distances[i];;
-        jacobian(i+indexStartRow, 3) = 0;
-        jacobian(i+indexStartRow, 4) = 0;
-        jacobian(i+indexStartRow, 5) = 0;
-        jacobian(i+indexStartRow, 6) = 0;
-        jacobian(i+indexStartRow, 7) = 0;
-        jacobian(i+indexStartRow, 8) = 0;
+        jacobian.row(i+indexStartRow) = arma::vec({(position.x - r.beacon.position.x) / distances[i],
+            (position.y - r.beacon.position.y) / distances[i],
+            (position.z - r.beacon.position.z) / distances[i],0,0,0,0,0,0,0,0,0,0,0,0}).t();
         i++;
     }
 }
 
 
-void KalmanFilterTOAIMU::jacobianImu(arma::mat& jacobian, const Vector3& acceleration, int indexStartRow) const {
+void KalmanFilterTOAIMU::jacobianImu(arma::mat& jacobian, const Vector3& acceleration, const Vector3& angularVelocity, int indexStartRow) const {
+    jacobian.row(indexStartRow) = arma::vec({0,0,0,0,0,0,acceleration.x,0,0,0,0,0,0,0,0}).t();
+    jacobian.row(indexStartRow+1) = arma::vec({0,0,0,0,0,0,0,acceleration.y,0,0,0,0,0,0,0}).t();
+    jacobian.row(indexStartRow+2) = arma::vec({0,0,0,0,0,0,0,0,acceleration.z,0,0,0,0,0,0}).t();
 
-    jacobian(indexStartRow, 0) = 0;
-    jacobian(indexStartRow, 1) = 0;
-    jacobian(indexStartRow, 2) = 0;
-    jacobian(indexStartRow, 3) = 0;
-    jacobian(indexStartRow, 4) = 0;
-    jacobian(indexStartRow, 5) = 0;
-    jacobian(indexStartRow, 6) = acceleration.x;
-    jacobian(indexStartRow, 7) = 0;
-    jacobian(indexStartRow, 8) = 0;
-    
-    jacobian(indexStartRow +1, 0) = 0;
-    jacobian(indexStartRow +1, 1) = 0;
-    jacobian(indexStartRow +1, 2) = 0;
-    jacobian(indexStartRow +1, 3) = 0;
-    jacobian(indexStartRow +1, 4) = 0;
-    jacobian(indexStartRow +1, 5) = 0;
-    jacobian(indexStartRow +1, 6) = 0;
-    jacobian(indexStartRow +1, 7) = acceleration.y;
-    jacobian(indexStartRow +1, 8) = 0;
-
-    jacobian(indexStartRow +2, 0) = 0;
-    jacobian(indexStartRow +2, 1) = 0;
-    jacobian(indexStartRow +2, 2) = 0;
-    jacobian(indexStartRow +2, 3) = 0;
-    jacobian(indexStartRow +2, 4) = 0;
-    jacobian(indexStartRow +2, 5) = 0;
-    jacobian(indexStartRow +2, 6) = 0;
-    jacobian(indexStartRow +2, 7) = 0; 
-    jacobian(indexStartRow +2, 8) = acceleration.z;
-
+    jacobian.row(indexStartRow+3) = arma::vec({0,0,0,0,0,0,0,0,0,0,0,0,angularVelocity.x,0,0}).t();
+    jacobian.row(indexStartRow+4) = arma::vec({0,0,0,0,0,0,0,0,0,0,0,0,0,angularVelocity.y,0}).t();
+    jacobian.row(indexStartRow+5) = arma::vec({0,0,0,0,0,0,0,0,0,0,0,0,0,0,angularVelocity.z}).t();
 }
 
 
@@ -523,11 +564,14 @@ bool KalmanFilterTOAIMU::getPose(Vector3& pose) {
     arma::vec state = { mPosition.x, mPosition.y, mPosition.z,
                         mVelocity.x, mVelocity.y, mVelocity.z,
                         mAcceleration.x, mAcceleration.y, mAcceleration.z,
+                        mAngles.x, mAngles.y, mAngles.z,
+                        mAngularVelocity.x, mAngularVelocity.y, mAngularVelocity.z
                       };
-    ROS_DEBUG("KalmanFilterTOAIMU get Pose");
+
+    ROS_INFO("KalmanFilterTOAIMU get Pose");
     // Prediction
-    arma::mat predictionStep(9, 9);
-    arma::mat predictionCovariance(9, 9);
+    arma::mat predictionStep(15, 15);
+    arma::mat predictionCovariance(15, 15);
 
     predictionMatrix(predictionStep, timeLag);
     predictionErrorCovariance(predictionCovariance, timeLag);
@@ -538,4 +582,24 @@ bool KalmanFilterTOAIMU::getPose(Vector3& pose) {
 
     stateToPose(pose, predictedState, predictedEstimationCovariance);
     return true;
+}
+
+
+KalmanFilterTOAIMU::Quaternion KalmanFilterTOAIMU::ToQuaternion(double yaw, double pitch, double roll) // yaw (Z), pitch (Y), roll (X)
+{
+    // Abbreviations for the various angular functions
+    double cy = cos(yaw * 0.5);
+    double sy = sin(yaw * 0.5);
+    double cp = cos(pitch * 0.5);
+    double sp = sin(pitch * 0.5);
+    double cr = cos(roll * 0.5);
+    double sr = sin(roll * 0.5);
+
+    Quaternion q;
+    q.w = cy * cp * cr + sy * sp * sr;
+    q.x = cy * cp * sr - sy * sp * cr;
+    q.y = sy * cp * sr + cy * sp * cr;
+    q.z = sy * cp * cr - cy * sp * sr;
+
+    return q;
 }

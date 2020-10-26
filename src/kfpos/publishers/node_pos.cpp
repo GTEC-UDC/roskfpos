@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     //Common parameters
     n.getParam("rate", rate);
     n.getParam("targetDeviceId", targetDeviceId);
-    n.getParam("toaTagId", tagId);
+    //n.getParam("toaTagId", tagId);
     n.getParam("useStartPosition", useStartPosition);
     n.getParam("rangingTopic", rangingTopic);
     n.getParam("anchorsTopic", anchorsTopic);
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     
     int tagIdInt;   
     std::stringstream ss;
-    ss << std::hex << tagId.c_str();
+    ss << std::hex << targetDeviceId.c_str();
     ss >> tagIdInt;
 
     aPosGenerator.setDeviceIdentifiers(tagIdInt);
@@ -165,6 +165,7 @@ int main(int argc, char *argv[])
     {
         ROS_INFO("Position Generator: TOA ON. Ranging Topic: %s", rangingTopic.c_str());
         ROS_INFO("Position Generator: Anchors Topic: %s", anchorsTopic.c_str());
+        ROS_INFO("Position Generator: Tag ID %s (%d)", targetDeviceId.c_str(),tagIdInt);
         sub0 = n.subscribe<gtec_msgs::Ranging>(rangingTopic, 20, &PosGenerator::newTOAMeasurement, &aPosGenerator);
         sub1 = n.subscribe<visualization_msgs::MarkerArray>(anchorsTopic, 20, &PosGenerator::newAnchorsMarkerArray, &aPosGenerator);
     }

@@ -410,7 +410,7 @@ void PosGenerator::publishPositionReport(Vector3 report) {
       msg.pose.covariance[i] = report.covarianceMatrix(i);
     }
 
-    msg.header.frame_id = "world";
+    msg.header.frame_id = "map";
     msg.header.stamp = ros::Time::now();
     ros_pub.publish(msg);
 
@@ -428,7 +428,7 @@ void PosGenerator::publishPositionReport(Vector3 report) {
 
     printf("(%f, %f, %f)\r", report.x, report.y, report.z);
 
-    newPos.header.frame_id = "world";
+    newPos.header.frame_id = "map";
     newPos.header.stamp = ros::Time::now();
 
     path.push_back(newPos);
@@ -439,7 +439,7 @@ void PosGenerator::publishPositionReport(Vector3 report) {
 
 //copy(path.begin(), path.end(), pathMsg.poses.begin());
     pathMsg.poses = path;
-    pathMsg.header.frame_id = "world";
+    pathMsg.header.frame_id = "map";
     pathMsg.header.stamp =  newPos.header.stamp;
 
     ros_pub_path.publish(pathMsg);
@@ -471,19 +471,34 @@ void PosGenerator::publishPositionReport(Vector3 report) {
   odomMsg.header.frame_id = "odom";
   odomMsg.header.stamp =  newPos.header.stamp;
 
-  odomMsg.child_frame_id = "6f1d";
+  odomMsg.child_frame_id = "base_link";
 
   ros_pub_odom.publish(odomMsg);
 
- mBroadcaster.sendTransform(
+//  mBroadcaster.sendTransform(
+//       tf::StampedTransform(
+//         tf::Transform(tf::Quaternion(0, -0.707,0, 0.707), tf::Vector3(report.x,report.y,report.z)),
+//         newPos.header.stamp,"map", "base_link"));
+  
+   mBroadcaster.sendTransform(
       tf::StampedTransform(
-        tf::Transform(tf::Quaternion(0, -0.707,0, 0.707), tf::Vector3(report.x,report.y,report.z)),
-        newPos.header.stamp,"world", "6f1d"));
+        tf::Transform(tf::Quaternion(0, 0,0, 1), tf::Vector3(report.x,report.y,report.z)),
+        newPos.header.stamp,"map", "base_link"));
 
-  mBroadcaster.sendTransform(
-      tf::StampedTransform(
-        tf::Transform(tf::Quaternion(0, 0,0,1), tf::Vector3(report.x,report.y,report.z)),
-        newPos.header.stamp,"world", "odom"));
+  // mBroadcaster.sendTransform(
+  //     tf::StampedTransform(
+  //       tf::Transform(tf::Quaternion(0, 0,0,1), tf::Vector3(report.x,report.y,report.z)),
+  //       newPos.header.stamp,"map", "odom"));
+  
+    // mBroadcaster.sendTransform(
+    //   tf::StampedTransform(
+    //     tf::Transform(tf::Quaternion(0, 0,0,1), tf::Vector3(report.x,report.y,report.z)),
+    //     newPos.header.stamp,"map", "odom"));
+
+    // mBroadcaster.sendTransform(
+    //   tf::StampedTransform(
+    //     tf::Transform(tf::Quaternion(0, 0,0,1), tf::Vector3(0,0,0)),
+    //     newPos.header.stamp,"odom", "base_link"));
 
   }
 

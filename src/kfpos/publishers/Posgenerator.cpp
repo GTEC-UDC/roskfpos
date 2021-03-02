@@ -484,6 +484,11 @@ void PosGenerator::publishPositionReport(Vector3 report) {
       tf::StampedTransform(
         tf::Transform(tf::Quaternion(0, 0,0, 1), tf::Vector3(report.x,report.y,report.z)),
         newPos.header.stamp,"map", "base_link"));
+  
+     mBroadcaster.sendTransform(
+      tf::StampedTransform(
+        tf::Transform(tf::Quaternion(0, 0,0, 1), tf::Vector3(0,0,0)),
+        newPos.header.stamp,"world", "map"));
 
   // mBroadcaster.sendTransform(
   //     tf::StampedTransform(

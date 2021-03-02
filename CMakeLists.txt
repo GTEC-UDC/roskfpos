@@ -39,6 +39,7 @@ catkin_package(
 include_directories(src/kfpos/algorithms)
 include_directories(src/kfpos/config)
 include_directories(src/kfpos/publishers)
+include_directories(src/kfpos/python)
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )

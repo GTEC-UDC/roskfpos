@@ -1,0 +1,12 @@
+<launch>
+    <arg default="6a39" name="targetDeviceId"></arg>
+    <arg name="rangingTopic" default="/gtec/toa/ranging"/>
+    <arg name="anchorsTopic" default="/gtec/toa/anchors"/>
+    <arg name="positionTopic" value="/gtec/ekf/position/tag"/>
+    <node name="DiscreteLocalizator" output="screen" pkg="gtec_roskfpos" type="DiscreteLocalization.py">
+        <param name="targetDeviceId" value="$(arg targetDeviceId)"></param>
+        <param name="rangingTopic" value="$(arg rangingTopic)"/>
+        <param name="anchorsTopic" value="$(arg anchorsTopic)"/>
+        <param name="positionTopic" value="$(arg positionTopic)"/>
+    </node>
+</launch>

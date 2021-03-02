@@ -1,5 +1,5 @@
 <launch>
-    <arg name="targetDeviceId" default="aDevice" ></arg>
+    <arg name="targetDeviceId" default="0" ></arg>
     <arg name="rangingTopic" default="/gtec/toa/ranging" ></arg>
     <arg name="anchorsTopic" default="/gtec/toa/anchors" ></arg>
     <arg name="toaTagId" default="0" ></arg>
